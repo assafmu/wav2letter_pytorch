@@ -12,7 +12,7 @@ class InferenceBatchSoftmax(nn.Module):
             return F.softmax(input_,dim=-1)
         else:
             return input_
-        
+
 class Conv1dBlock(nn.Module):
     def __init__(self,input_size,output_size,kernel_size,stride,drop_out_prob=-1.0,dilation=1,padding='same',bn=True,activation_use=True):
         super(Conv1dBlock, self).__init__()
@@ -46,7 +46,7 @@ class Conv1dBlock(nn.Module):
         )
         self.batch_norm = nn.BatchNorm1d(num_features=output_size,momentum=0.9,eps=0.001) if bn else None
         self.drop_out = nn.Dropout(drop_out_prob) if self.drop_out_prob != -1 else None
-        
+
     def forward(self,xs,hid=None):
         if self.paddingAdded is not None:
             xs = self.paddingAdded(xs)
@@ -57,19 +57,19 @@ class Conv1dBlock(nn.Module):
             output = torch.clamp(input=output,min=0,max=20)
         if self.drop_out is not None:
             output = self.drop_out(output)
-            
+
         return output
-    
+
 class Wav2Letter(nn.Module):
     def __init__(self,labels='abc',audio_conf=None,mid_layers=16):
         super(Wav2Letter,self).__init__()
         self.audio_conf = audio_conf
         self.labels = labels
         self.mid_layers = mid_layers
-        
+
         nfft = (self.audio_conf['sample_rate'] * self.audio_conf['window_size'])
         input_size = int(1+(nfft/2))
-        
+
         conv1 = Conv1dBlock(input_size=input_size,output_size=256,kernel_size=(11,),stride=2,dilation=1,drop_out_prob=0.2,padding='same')
         conv2s = []
         conv2s.append(('conv1d_0',conv1))
@@ -100,32 +100,33 @@ class Wav2Letter(nn.Module):
                 layer = Conv1dBlock(input_size=layer_size,output_size=896,kernel_size=(29,),stride=1,dilation=2,drop_out_prob=0.4)
                 conv2s.append(('conv1d_{}'.format(idx+1),layer))
                 layer_size = layer.output_size
-        
+
         layer = Conv1dBlock(input_size=layer_size, output_size=1024, kernel_size=(1,), stride=1,dilation=1,drop_out_prob=0.4)
         conv2s.append(('conv1d_{}'.format(mid_layers+1),layer))
         layer_size = layer.output_size
         layer = Conv1dBlock(input_size=layer_size, output_size=len(self.labels), kernel_size=(1,), stride=1,bn=False,activation_use=False)
         conv2s.append(('conv1d_{}'.format(mid_layers+2),layer))
-        
+
         self.conv1ds = nn.Sequential(OrderedDict(conv2s))
         self.inference_softmax = InferenceBatchSoftmax()
-        
+
     def forward(self, x):
         x = self.conv1ds(x)
         x = x.transpose(1,2)
         x = self.inference_softmax(x)
         return x
-    
+
     @classmethod
     def load_model(cls,path):
         package = torch.load(path,map_location = lambda storage, loc: storage)
         return cls.load_model_package(package)
+    
     @classmethod
-    def load_model_package(csl,pacakge):
+    def load_model_package(csl,package):
         model = cls(labels=package['labels'],audio_conf=package['audio_conf'],mid_layers=package['layers'])
         model.load_state_dict(pacakge['state_dict'])
         return model
-    
+
     @staticmethod
     def serialize(model):
         package = {
@@ -135,7 +136,7 @@ class Wav2Letter(nn.Module):
                 'state_dict':model.state_dict()
                 }
         return package
-    
+
     @staticmethod
     def get_param_size(model):
         params = 0
@@ -145,33 +146,4 @@ class Wav2Letter(nn.Module):
                 tmp*=x
             params +=tmp
         return params
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
+    

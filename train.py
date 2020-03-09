@@ -35,21 +35,33 @@ parser.add_argument('--model-path',default='models/wav2letter.pth.tar')
 parser.add_argument('--layers',default=16,type=int,help='Number of Conv1D blocks, between 3 and 16. Last 2 layers are always added.')
 parser.add_argument('--labels',default='english',type=str,help='Name of label set to use')
 parser.add_argument('--print-samples',default=False,action='store_true',help='Print samples from each epoch')
+parser.add_argument('--continue-from',default='',type=str,help='Continue training a saved model')
 
 def get_audio_conf(args):
     audio_conf = {k:args[k] for k in ['sample_rate','window_size','window_stride','window']}
     return audio_conf
 
+def init_new_model(kwargs):
+    labels = label_sets.labels_map[kwargs['labels']]
+    audio_conf = get_audio_conf(kwargs)
+    model = Wav2Letter(labels=labels,audio_conf=audio_conf,mid_layers=kwargs['layers'])
+    return model
+
+def init_model(kwargs):
+    if kwargs['continue_from']:
+        model = Wav2Letter.load_model(kwargs['continue_from'])
+    else:
+        model = init_new_model(kwargs)
+    return model
+
 def train(**kwargs):
     print('starting at %s' % time.asctime())
     if kwargs['tensorboard']:
         setup_tensorboard(kwargs['log_dir'])
-    audio_conf = get_audio_conf(kwargs)
-    labels = label_sets.labels_map[kwargs['labels']]
+    model = init_model(kwargs)
     decoder = None#GreedyDecoder(labels)
-    train_dataset = SpectrogramDataset(audio_conf,kwargs['train_manifest'], labels)
-    eval_dataset = SpectrogramDataset(audio_conf,kwargs['val_manifest'],labels)
-    model = Wav2Letter(labels=labels,audio_conf=audio_conf,mid_layers=kwargs['layers'])
+    train_dataset = SpectrogramDataset(model.audio_conf, kwargs['train_manifest'], model.labels)
+    eval_dataset = SpectrogramDataset(model.audio_conf, kwargs['val_manifest'],model.labels)
     criterion = nn.CTCLoss(blank=0,reduction='none')
     parameters = model.parameters()
     optimizer = torch.optim.SGD(parameters,lr=kwargs['lr'],momentum=kwargs['momentum'],nesterov=True,weight_decay=1e-5)
@@ -133,13 +145,3 @@ def save_model(model,path,should_save):
 if __name__ == '__main__':
     arguments = parser.parse_args()
     train(**vars(arguments))
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
