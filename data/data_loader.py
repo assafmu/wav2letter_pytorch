@@ -10,7 +10,8 @@ import numpy as np
 import scipy.signal
 #import torchaudio
 import soundfile
-from torch.utils.data import Dataset
+import torch
+from torch.utils.data import Dataset,DataLoader
 
 windows = {'hamming': scipy.signal.hamming, 'hann': scipy.signal.hann, 'blackman': scipy.signal.blackman,'bartlett':scipy.signal.bartlett}
 
@@ -67,3 +68,19 @@ class SpectrogramDataset(Dataset):
     
     def __len__(self):
         return self.size
+
+def _collator(batch):
+    inputs, targets, file_paths, texts = zip(*batch)
+    input_lengths = list(map(lambda input: input.shape[1], inputs))
+    target_lengths = list(map(len,targets))
+    longest_input = max(input_lengths)
+    longest_target = max(target_lengths)
+    pad_function = lambda x:np.pad(x,((0,0),(0,longest_input-x.shape[1])),mode='wrap')
+    inputs = torch.FloatTensor(list(map(pad_function,inputs)))
+    targets = torch.IntTensor([np.pad(np.array(t),(0,longest_target-len(t)),mode='constant') for t in targets])
+    return inputs, input_lengths, targets, target_lengths, file_paths, texts
+
+class BatchAudioDataLoader(DataLoader):
+    def __init__(self, *args, **kwargs):
+        super(BatchAudioDataLoader, self).__init__(*args,**kwargs)
+        self.collate_fn = _collator

@@ -4,6 +4,7 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 class InferenceBatchSoftmax(nn.Module):
     def forward(self, input_):
@@ -113,7 +114,13 @@ class Wav2Letter(nn.Module):
         x = x.transpose(1,2)
         x = self.inference_softmax(x)
         return x
-
+    
+    def get_scaling_factor(self):
+        strides = []
+        for module in self.conv1ds.children():
+            strides.append(module.conv1[0].stride[0])
+        return np.prod(strides)
+    
     @classmethod
     def load_model(cls,path):
         package = torch.load(path,map_location = lambda storage, loc: storage)
