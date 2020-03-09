@@ -1,0 +1,6 @@
+python-levenshtein
+librosa
+tqdm
+pytorch
+six
+scipy
