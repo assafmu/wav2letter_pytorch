@@ -59,7 +59,7 @@ def train(**kwargs):
     if kwargs['tensorboard']:
         setup_tensorboard(kwargs['log_dir'])
     model = init_model(kwargs)
-    decoder = None#GreedyDecoder(labels)
+    decoder = GreedyDecoder(labels)
     train_dataset = SpectrogramDataset(model.audio_conf, kwargs['train_manifest'], model.labels)
     eval_dataset = SpectrogramDataset(model.audio_conf, kwargs['val_manifest'],model.labels)
     criterion = nn.CTCLoss(blank=0,reduction='none')
@@ -111,9 +111,9 @@ def compute_error_rates(model,dataset,decoder,kwargs):
                 print('Validation case')
                 print(text)
                 print(''.join(map(lambda i: model.labels[i], torch.max(out.squeeze(), 1).indices)))
-            #predicted_texts, offsets = decoder.decode(probs=out.transpose(1,0), sizes=out_sizes)
-            #cer[idx] = decoder.cer_ratio(text, predicted_texts[0][0])
-            #wer[idx] = decoder.wer_ratio(text, predicted_texts[0][0])
+            predicted_texts, offsets = decoder.decode(probs=out.transpose(1,0), sizes=out_sizes)
+            cer[idx] = decoder.cer_ratio(text, predicted_texts[0][0])
+            wer[idx] = decoder.wer_ratio(text, predicted_texts[0][0])
     return cer, wer
 
 _tensorboard_writer = None
