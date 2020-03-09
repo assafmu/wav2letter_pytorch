@@ -1,6 +1,8 @@
-python-levenshtein
 librosa
 tqdm
 pytorch
 six
 scipy
+#The following libraries require Microsoft Visual Build C++ Tools on windows. Should check requirements on Linux.
+python-levenshtein
+kenlm
