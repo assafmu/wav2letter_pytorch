@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import math
 from collections import OrderedDict
 
 import torch
@@ -10,8 +9,7 @@ class InferenceBatchSoftmax(nn.Module):
     def forward(self, input_):
         if not self.training:
             return F.softmax(input_,dim=-1)
-        else:
-            return input_
+        return input_
 
 class Conv1dBlock(nn.Module):
     def __init__(self,input_size,output_size,kernel_size,stride,drop_out_prob=-1.0,dilation=1,padding='same',bn=True,activation_use=True):
@@ -47,7 +45,7 @@ class Conv1dBlock(nn.Module):
         self.batch_norm = nn.BatchNorm1d(num_features=output_size,momentum=0.9,eps=0.001) if bn else None
         self.drop_out = nn.Dropout(drop_out_prob) if self.drop_out_prob != -1 else None
 
-    def forward(self,xs,hid=None):
+    def forward(self,xs):
         if self.paddingAdded is not None:
             xs = self.paddingAdded(xs)
         output = self.conv1(xs)
@@ -122,9 +120,9 @@ class Wav2Letter(nn.Module):
         return cls.load_model_package(package)
     
     @classmethod
-    def load_model_package(csl,package):
+    def load_model_package(cls,package):
         model = cls(labels=package['labels'],audio_conf=package['audio_conf'],mid_layers=package['layers'])
-        model.load_state_dict(pacakge['state_dict'])
+        model.load_state_dict(package['state_dict'])
         return model
 
     @staticmethod
