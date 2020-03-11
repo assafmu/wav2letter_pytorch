@@ -17,7 +17,7 @@ an Anaconda installation on Ubuntu.
 
 Install [PyTorch](https://github.com/pytorch/pytorch#installation) if you haven't already.
 
-Install pytorch audio:
+Install pytorch audio (if on windows, see note):
 ```
 sudo apt-get install sox libsox-dev libsox-fmt-all
 git clone https://github.com/pytorch/audio.git
@@ -30,6 +30,17 @@ Finally clone this repo and run this within the repo:
 ```
 pip install -r requirements.txt
 ```
+## Windows installation
+
+As of March 11, the repo runs correctly on a Windows 10 machine. We expect to keep Windows support for the forseeable future.
+
+However, Windows is recommended only for spot checks - for actual training, use Linux.
+
+We recommend installing PyTorch with an Anaconda installation, and Microsoft Visual C++ Build Tools for kenlm and python-levenshtein.
+
+Tensorboard has not been tested on windows yet, so we recommend running with --no-tensorboard.
+
+As of March 11, torchaudio does not support Windows, however it is [in progress](https://github.com/pytorch/audio/issues/425)
 
 # Usage
 

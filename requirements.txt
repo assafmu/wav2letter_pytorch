@@ -4,3 +4,5 @@ tqdm
 pytorch
 six
 scipy
+# Install this version of kenlm. Seems to be easier to install on windows.
+https://github.com/kpu/kenlm/archive/master.zip

@@ -16,7 +16,7 @@ from torch.utils.data import Dataset,DataLoader
 windows = {'hamming': scipy.signal.hamming, 'hann': scipy.signal.hann, 'blackman': scipy.signal.blackman,'bartlett':scipy.signal.bartlett}
 
 def load_audio(path):
-    sound, _ = soundfile.read(path)
+    sound, _ = soundfile.read(path) #Using soundfile for now. When support comes, move to using torchaudio instead - should have better cross-platform support.
     sound = sound.T
     if len(sound.shape) > 1:
         if sound.shape[1] == 1:
