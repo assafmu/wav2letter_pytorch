@@ -225,7 +225,8 @@ def prefix_beam_search(ctc, labels, blank_index=0, lm=None,k=25,alpha=0.3,beta=5
         sorter = lambda l: A_next[l] * (len(W(l)) + 1) ** beta
         A_prev = sorted(A_next, key=sorter, reverse=True)[:k]
         # END: STEP 7
-        
+    if len(A_prev) ==0:
+        return ''
     return A_prev[0].strip('>')
     #For N-best decode, return A_prev[0:N] - not tested yet.
 
