@@ -76,7 +76,7 @@ def train(**kwargs):
 def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset):
     device = 'cuda:0' if torch.cuda.is_available() and kwargs['cuda'] else 'cpu'
     model.to(device)
-    decoder = None#GreedyDecoder(labels)
+    decoder = GreedyDecoder(model.labels)
     criterion = nn.CTCLoss(blank=0,reduction='none')
     parameters = model.parameters()
     optimizer = torch.optim.SGD(parameters,lr=kwargs['lr'],momentum=kwargs['momentum'],nesterov=True,weight_decay=1e-5)
@@ -121,9 +121,9 @@ def compute_error_rates(model,dataset,decoder,kwargs):
                 print('Validation case')
                 print(text)
                 print(''.join(map(lambda i: model.labels[i], torch.max(out.squeeze(), 1).indices)))
-            #predicted_texts, offsets = decoder.decode(probs=out.transpose(1,0), sizes=out_sizes)
-            #cer[idx] = decoder.cer_ratio(text, predicted_texts[0][0])
-            #wer[idx] = decoder.wer_ratio(text, predicted_texts[0][0])
+            predicted_texts, offsets = decoder.decode(probs=out.transpose(1,0), sizes=out_sizes)
+            cer[idx] = decoder.cer_ratio(text, predicted_texts[0][0])
+            wer[idx] = decoder.wer_ratio(text, predicted_texts[0][0])
     return cer, wer
 
 _tensorboard_writer = None

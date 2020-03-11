@@ -18,6 +18,7 @@
 
 import torch
 from six.moves import xrange
+import Levenshtein as Lev
 
 
 class Decoder(object):
@@ -32,7 +33,6 @@ class Decoder(object):
     """
 
     def __init__(self, labels, blank_index=0):
-        import Levenshtein as Lev
         # e.g. labels = "_'ABCDEFGHIJKLMNOPQRSTUVWXYZ#"
         self.labels = labels
         self.int_to_char = dict([(i, c) for (i, c) in enumerate(labels)])
