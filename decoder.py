@@ -149,7 +149,7 @@ class GreedyDecoder(Decoder):
                                                    remove_repetitions=True, return_offsets=True)
         return strings, offsets
     
-def prefix_beam_search(ctc, labels, blank_index=0, lm=None,k=25,alpha=0.3,beta=5,prune=0.001):
+def prefix_beam_search(ctc, labels, blank_index=0, lm=None,k=25,alpha=0.3,beta=5,prune=0.001,return_weights=False):
     """
     Performs prefix beam search on the output of a CTC network.
     Originally from https://github.com/corticph/prefix-beam-search, with minor edits.
@@ -160,11 +160,13 @@ def prefix_beam_search(ctc, labels, blank_index=0, lm=None,k=25,alpha=0.3,beta=5
         alpha (float): The language model weight. Should usually be between 0 and 1.
         beta (float): The language model compensation term. The higher the 'alpha', the higher the 'beta'.
         prune (float): Only extend prefixes with chars with an emission probability higher than 'prune'.
+        return_weights(bool): return the confidence of the decoded string.
     Returns:
         string: The decoded CTC output.
     """
     lm = (lambda l: 1) if lm is None else lm # if no LM is provided, just set to function returning 1
-    W = lambda l: re.findall(r'\w+[\s|>]', l)
+    word_count_re = re.compile(r'\w+[\s|>]')
+    W = lambda l: word_count_re.findall(l)
     F = ctc.shape[1]
     assert (F == len(labels)), "ctc size:%d, labels: %d" % (F, len(labels))
     ctc = np.vstack((np.zeros(F), ctc)) # just add an imaginative zero'th step (will make indexing more intuitive)
@@ -226,8 +228,10 @@ def prefix_beam_search(ctc, labels, blank_index=0, lm=None,k=25,alpha=0.3,beta=5
         A_prev = sorted(A_next, key=sorter, reverse=True)[:k]
         # END: STEP 7
     if len(A_prev) ==0:
-        return ''
-    return A_prev[0].strip('>')
+        A_prev=['']
+    if return_weights:
+        return A_prev[0],A_next[A_prev[0]] * (len(W(A_prev[0])) + 1) ** beta
+    return A_prev[0]
     #For N-best decode, return A_prev[0:N] - not tested yet.
 
 class PrefixBeamSearchLMDecoder(Decoder):
