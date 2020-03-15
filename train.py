@@ -39,7 +39,6 @@ parser.add_argument('--layers',default=16,type=int,help='Number of Conv1D blocks
 parser.add_argument('--labels',default='english',type=str,help='Name of label set to use')
 parser.add_argument('--print-samples',default=False,action='store_true',help='Print samples from each epoch')
 parser.add_argument('--continue-from',default='',type=str,help='Continue training a saved model')
-parser.add_argument('--lm-path', default='',type=str,help='KenLM model path to use in evaluation decoding. Defaults to no model.')
 
 def get_audio_conf(args):
     audio_conf = {k:args[k] for k in ['sample_rate','window_size','window_stride','window']}
@@ -78,16 +77,15 @@ def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset
     device = 'cuda:0' if torch.cuda.is_available() and kwargs['cuda'] else 'cpu'
     model.to(device)
     greedy_decoder = GreedyDecoder(model.labels)
-    decoder = PrefixBeamSearchLMDecoder(kwargs['lm_path'],model.labels)
     criterion = nn.CTCLoss(blank=0,reduction='none')
     parameters = model.parameters()
     optimizer = torch.optim.SGD(parameters,lr=kwargs['lr'],momentum=kwargs['momentum'],nesterov=True,weight_decay=1e-5)
-    model.train()
     scaling_factor = model.get_scaling_factor()
     epochs=kwargs['epochs']
     print('Train dataset size:%d' % len(train_dataset.ids))
     batch_count = math.ceil(len(train_dataset) / kwargs['batch_size'])
     for epoch in range(epochs):
+        model.train()
         total_loss = 0
         for idx, data in tqdm.tqdm(enumerate(train_batch_loader)):
             inputs, input_lengths, targets, target_lengths, file_paths, texts = data
@@ -100,22 +98,21 @@ def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset
             optimizer.step()
             total_loss += loss.mean().item()
         log_loss_to_tensorboard(epoch, total_loss / batch_count)
-        evaluate(model,eval_dataset,decoder,greedy_decoder,epoch,kwargs)
+        evaluate(model,eval_dataset,greedy_decoder,epoch,kwargs)
     save_model(model, kwargs['model_path'], not kwargs['no_model_save'])
     print('Finished at %s' % time.asctime())
     
 
-def evaluate(model,dataset,decoder,greedy_decoder,epoch,kwargs):
-    cer, wer, greedy_cer, greedy_wer= compute_error_rates(model, dataset, decoder, greedy_decoder, kwargs)
-    log_error_rates_to_tensorboard(epoch,cer.mean(),wer.mean(),greedy_cer.mean(),greedy_wer.mean())
+def evaluate(model,dataset,greedy_decoder,epoch,kwargs):
+    greedy_cer, greedy_wer= compute_error_rates(model, dataset, decoder, greedy_decoder, kwargs)
+    log_error_rates_to_tensorboard(epoch,greedy_cer.mean(),greedy_wer.mean())
     
-def compute_error_rates(model,dataset,decoder,greedy_decoder,kwargs):
+def compute_error_rates(model,dataset,greedy_decoder,kwargs):
     device = 'cuda:0' if torch.cuda.is_available() and kwargs['cuda'] else 'cpu'
+    model.eval()
     with torch.no_grad():
         num_samples = len(dataset)
         index_to_print = random.randrange(num_samples)
-        cer = np.zeros(num_samples)
-        wer = np.zeros(num_samples)
         greedy_cer = np.zeros(num_samples)
         greedy_wer = np.zeros(num_samples)
         for idx, (data) in enumerate(dataset):
@@ -127,15 +124,12 @@ def compute_error_rates(model,dataset,decoder,greedy_decoder,kwargs):
                 print('Validation case')
                 print(text)
                 print(''.join(map(lambda i: model.labels[i], torch.max(out.squeeze(), 1).indices)))
-            predicted_texts = decoder.decode(probs=out.transpose(1,0)[0], sizes=out_sizes)
-            cer[idx] = decoder.cer_ratio(text, predicted_texts)
-            wer[idx] = decoder.wer_ratio(text, predicted_texts)
             
             greedy_texts, _ = greedy_decoder.decode(probs=out.transpose(1,0), sizes=out_sizes)
             greedy_cer[idx] = greedy_decoder.cer(text, greedy_texts[0][0])
             greedy_wer[idx] = greedy_decoder.wer(text, greedy_texts[0][0])
             
-    return cer, wer, greedy_cer, greedy_wer
+    return greedy_cer, greedy_wer
 
 _tensorboard_writer = None
 def setup_tensorboard(log_dir):
@@ -148,8 +142,8 @@ def log_loss_to_tensorboard(epoch,avg_loss):
     print('Total loss: %f' % avg_loss)
     _log_to_tensorboard(epoch,{'Avg Train Loss': avg_loss})
     
-def log_error_rates_to_tensorboard(epoch,average_cer,average_wer,greedy_cer,greedy_wer):
-    _log_to_tensorboard(epoch,{'CER': average_cer, 'WER': average_wer,'G_CER': greedy_cer, 'G_WER': greedy_wer})
+def log_error_rates_to_tensorboard(epoch,greedy_cer,greedy_wer):
+    _log_to_tensorboard(epoch,{'G_CER': greedy_cer, 'G_WER': greedy_wer})
     
 def _log_to_tensorboard(epoch,values,tensorboard_id='Wav2Letter training'):
     if _tensorboard_writer:

@@ -6,12 +6,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-class InferenceBatchSoftmax(nn.Module):
-    def forward(self, input_):
-        if not self.training:
-            return F.softmax(input_,dim=-1)
-        return input_
-
 class Conv1dBlock(nn.Module):
     def __init__(self,input_size,output_size,kernel_size,stride,drop_out_prob=-1.0,dilation=1,padding='same',bn=True,activation_use=True):
         super(Conv1dBlock, self).__init__()
@@ -107,12 +101,14 @@ class Wav2Letter(nn.Module):
         conv2s.append(('conv1d_{}'.format(mid_layers+2),layer))
 
         self.conv1ds = nn.Sequential(OrderedDict(conv2s))
-        self.inference_softmax = InferenceBatchSoftmax()
 
     def forward(self, x):
         x = self.conv1ds(x)
         x = x.transpose(1,2)
-        x = self.inference_softmax(x)
+        if self.training:
+            x = F.log_softmax(x,dim=-1)
+        else:
+            x = F.softmax(x,dim=-1)
         return x
     
     def get_scaling_factor(self):

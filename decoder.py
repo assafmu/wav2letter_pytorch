@@ -147,9 +147,9 @@ class GreedyDecoder(Decoder):
         _, max_probs = torch.max(probs, 2)
         strings, offsets = self.convert_to_strings(max_probs.view(max_probs.size(0), max_probs.size(1)), sizes,
                                                    remove_repetitions=True, return_offsets=True)
-        return strings, offsets
+        return strings[0]
     
-def prefix_beam_search(ctc, labels, blank_index=0, lm=None,k=25,alpha=0.3,beta=5,prune=0.001,return_weights=False):
+def prefix_beam_search(ctc, labels, blank_index=0, lm=None,k=5,alpha=0.3,beta=5,prune=0.001,end_char='>',return_weights=False):
     """
     Performs prefix beam search on the output of a CTC network.
     Originally from https://github.com/corticph/prefix-beam-search, with minor edits.
@@ -164,11 +164,14 @@ def prefix_beam_search(ctc, labels, blank_index=0, lm=None,k=25,alpha=0.3,beta=5
     Returns:
         string: The decoded CTC output.
     """
+    assert (ctc.shape[1] == len(labels)), "ctc size:%d, labels: %d" % (ctc.shape[1], len(labels))
+    assert ctc.shape[0] > 1, "ctc length: %d was too short" % ctc.shape[0]
+    assert (ctc > 0).all(), 'ctc output contains negative numbers'
     lm = (lambda l: 1) if lm is None else lm # if no LM is provided, just set to function returning 1
     word_count_re = re.compile(r'\w+[\s|>]')
     W = lambda l: word_count_re.findall(l)
     F = ctc.shape[1]
-    assert (F == len(labels)), "ctc size:%d, labels: %d" % (F, len(labels))
+    
     ctc = np.vstack((np.zeros(F), ctc)) # just add an imaginative zero'th step (will make indexing more intuitive)
     T = ctc.shape[0]
     blank_char = labels[blank_index]
@@ -186,7 +189,7 @@ def prefix_beam_search(ctc, labels, blank_index=0, lm=None,k=25,alpha=0.3,beta=5
         pruned_alphabet = [labels[i] for i in np.where(ctc[t] > prune)[0]]
         for l in A_prev:
             
-            if len(l) > 0 and l[-1] == '>':
+            if len(l) > 0 and l[-1] == end_char:
                 Pb[t][l] = Pb[t - 1][l]
                 Pnb[t][l] = Pnb[t - 1][l]
                 continue  
@@ -209,8 +212,8 @@ def prefix_beam_search(ctc, labels, blank_index=0, lm=None,k=25,alpha=0.3,beta=5
                 # END: STEP 4
 
                     # STEP 5: Extending with any other non-blank character and LM constraints
-                    elif len(l.replace(' ', '')) > 0 and c in (' ', '>'):
-                        lm_prob = lm(l_plus.strip(' >')) ** alpha
+                    elif len(l.replace(' ', '')) > 0 and c in (' ', end_char):
+                        lm_prob = lm(l_plus.strip(' '+end_char)) ** alpha
                         Pnb[t][l_plus] += lm_prob * ctc[t][c_ix] * (Pb[t - 1][l] + Pnb[t - 1][l])
                     else:
                         Pnb[t][l_plus] += ctc[t][c_ix] * (Pb[t - 1][l] + Pnb[t - 1][l])
@@ -235,7 +238,7 @@ def prefix_beam_search(ctc, labels, blank_index=0, lm=None,k=25,alpha=0.3,beta=5
     #For N-best decode, return A_prev[0:N] - not tested yet.
 
 class PrefixBeamSearchLMDecoder(Decoder):
-    def __init__(self,lm_path,labels,blank_index=0,k=25,alpha=0.3,beta=5,prune=1e-3):
+    def __init__(self,lm_path,labels,blank_index=0,k=5,alpha=0.3,beta=5,prune=1e-3):
         """
         Args:
             lm_path (str): The path to the kenlm language model.
@@ -259,5 +262,10 @@ class PrefixBeamSearchLMDecoder(Decoder):
         self.prune=prune
         
     def decode(self,probs,sizes=None):
-        return prefix_beam_search(probs,self.labels,self.blank_index,self.lm_weigh,self.k,self.alpha,self.beta,self.prune)
+        if len(probs.shape) == 2: # Single    
+            return prefix_beam_search(probs,self.labels,self.blank_index,self.lm_weigh,self.k,self.alpha,self.beta,self.prune)
+        elif len(probs.shape) == 3: # Batch
+            return [self.decode(prob) for prob in probs]
+        else:
+            raise RuntimeError('Decoding with wrong shape: %s, expected either [Batch X Frames X Labels] or [Frames X Labels]', % str(probs.shape))
     
