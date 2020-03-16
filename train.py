@@ -104,7 +104,7 @@ def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset
     
 
 def evaluate(model,dataset,greedy_decoder,epoch,kwargs):
-    greedy_cer, greedy_wer= compute_error_rates(model, dataset, decoder, greedy_decoder, kwargs)
+    greedy_cer, greedy_wer= compute_error_rates(model, dataset, greedy_decoder, kwargs)
     log_error_rates_to_tensorboard(epoch,greedy_cer.mean(),greedy_wer.mean())
     
 def compute_error_rates(model,dataset,greedy_decoder,kwargs):
@@ -112,7 +112,7 @@ def compute_error_rates(model,dataset,greedy_decoder,kwargs):
     model.eval()
     with torch.no_grad():
         num_samples = len(dataset)
-        index_to_print = random.randrange(num_samples)
+        index_to_print = 0#random.randrange(num_samples)
         greedy_cer = np.zeros(num_samples)
         greedy_wer = np.zeros(num_samples)
         for idx, (data) in enumerate(dataset):
@@ -123,12 +123,11 @@ def compute_error_rates(model,dataset,greedy_decoder,kwargs):
             if idx == index_to_print and kwargs['print_samples']:
                 print('Validation case')
                 print(text)
-                print(''.join(map(lambda i: model.labels[i], torch.max(out.squeeze(), 1).indices)))
+                print(''.join(map(lambda i: model.labels[i], torch.argmax(out.squeeze(), 1))))
             
-            greedy_texts, _ = greedy_decoder.decode(probs=out.transpose(1,0), sizes=out_sizes)
-            greedy_cer[idx] = greedy_decoder.cer(text, greedy_texts[0][0])
-            greedy_wer[idx] = greedy_decoder.wer(text, greedy_texts[0][0])
-            
+            greedy_texts = greedy_decoder.decode(probs=out.transpose(1,0), sizes=out_sizes)
+            greedy_cer[idx] = greedy_decoder.cer(text, greedy_texts[0])
+            greedy_wer[idx] = greedy_decoder.wer(text, greedy_texts[0])
     return greedy_cer, greedy_wer
 
 _tensorboard_writer = None

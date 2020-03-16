@@ -8,16 +8,15 @@ import subprocess
 import librosa
 import numpy as np
 import scipy.signal
-#import torchaudio
-import soundfile
+from scipy.io import wavfile
 import torch
 from torch.utils.data import Dataset,DataLoader
 
 windows = {'hamming': scipy.signal.hamming, 'hann': scipy.signal.hann, 'blackman': scipy.signal.blackman,'bartlett':scipy.signal.bartlett}
 
 def load_audio(path):
-    sound, _ = soundfile.read(path) #Using soundfile for now. When support comes, move to using torchaudio instead - should have better cross-platform support.
-    sound = sound.T
+    sr, sound = wavfile.read(path)
+    sound = sound.astype('float32') / 32767
     if len(sound.shape) > 1:
         if sound.shape[1] == 1:
             sound = sound.squeeze()

@@ -267,5 +267,5 @@ class PrefixBeamSearchLMDecoder(Decoder):
         elif len(probs.shape) == 3: # Batch
             return [self.decode(prob) for prob in probs]
         else:
-            raise RuntimeError('Decoding with wrong shape: %s, expected either [Batch X Frames X Labels] or [Frames X Labels]', % str(probs.shape))
+            raise RuntimeError('Decoding with wrong shape: %s, expected either [Batch X Frames X Labels] or [Frames X Labels]' % str(probs.shape))
     
