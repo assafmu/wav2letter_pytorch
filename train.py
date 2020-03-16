@@ -112,7 +112,7 @@ def compute_error_rates(model,dataset,greedy_decoder,kwargs):
     model.eval()
     with torch.no_grad():
         num_samples = len(dataset)
-        index_to_print = 0#random.randrange(num_samples)
+        index_to_print = random.randrange(num_samples)
         greedy_cer = np.zeros(num_samples)
         greedy_wer = np.zeros(num_samples)
         for idx, (data) in enumerate(dataset):
@@ -126,8 +126,8 @@ def compute_error_rates(model,dataset,greedy_decoder,kwargs):
                 print(''.join(map(lambda i: model.labels[i], torch.argmax(out.squeeze(), 1))))
             
             greedy_texts = greedy_decoder.decode(probs=out.transpose(1,0), sizes=out_sizes)
-            greedy_cer[idx] = greedy_decoder.cer(text, greedy_texts[0])
-            greedy_wer[idx] = greedy_decoder.wer(text, greedy_texts[0])
+            greedy_cer[idx] = greedy_decoder.cer_ratio(text, greedy_texts[0])
+            greedy_wer[idx] = greedy_decoder.wer_ratio(text, greedy_texts[0])
     return greedy_cer, greedy_wer
 
 _tensorboard_writer = None

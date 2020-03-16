@@ -76,7 +76,7 @@ class Decoder(object):
         return Lev.distance(s1, s2)
     
     def cer_ratio(self, expected, predicted):
-        return 100 * self.cer(expected,predicted) / float(len(expected))
+        return 100 * self.cer(expected,predicted) / float(len(expected.replace(' ','')))
     
     def wer_ratio(self, expected, predicted):
         return 100 * self.wer(expected,predicted) / float(len(expected.split()))
