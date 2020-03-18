@@ -72,7 +72,9 @@ def train(**kwargs):
     train_dataset, train_batch_loader, eval_dataset = init_datasets(model.audio_conf, model.labels, kwargs)
     if kwargs['tensorboard']:
         setup_tensorboard(kwargs['log_dir'])
-    training_loop(model,kwargs, train_dataset, train_batch_loader, eval_dataset)    
+    training_loop(model,kwargs, train_dataset, train_batch_loader, eval_dataset)   
+    if kwargs['tensorboard']:
+        _tensorboard_writer.close()
 
 def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset):
     device = 'cuda:0' if torch.cuda.is_available() and kwargs['cuda'] else 'cpu'
