@@ -39,6 +39,7 @@ parser.add_argument('--layers',default=16,type=int,help='Number of Conv1D blocks
 parser.add_argument('--labels',default='english',type=str,help='Name of label set to use')
 parser.add_argument('--print-samples',default=False,action='store_true',help='Print samples from each epoch')
 parser.add_argument('--continue-from',default='',type=str,help='Continue training a saved model')
+parser.add_argument('--cuda',default=False,action='store_true',help='Enable training and evaluation with GPU')
 
 def get_audio_conf(args):
     audio_conf = {k:args[k] for k in ['sample_rate','window_size','window_stride','window']}
