@@ -133,7 +133,7 @@ class Wav2Letter(nn.Module):
         package = {
                 'audio_conf':model.audio_conf,
                 'labels':model.labels,
-                'mid_layers':model.mid_layers,
+                'layers':model.mid_layers,
                 'state_dict':model.state_dict()
                 }
         return package

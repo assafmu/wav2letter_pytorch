@@ -10,11 +10,13 @@ import time
 import math
 import datetime
 import random
+import glob
 
 from data import label_sets
 from model import Wav2Letter
 from data.data_loader import SpectrogramDataset, BatchAudioDataLoader
 from decoder import GreedyDecoder, PrefixBeamSearchLMDecoder
+import timing
 from torch.utils.data import BatchSampler, SequentialSampler
 
 parser = argparse.ArgumentParser(description='Wav2Letter training')
@@ -33,14 +35,14 @@ parser.add_argument('--no-tensorboard',dest='tensorboard',action='store_false',h
 parser.add_argument('--log-dir',default='visualize/wav2letter',type=str,help='Directory for tensorboard logs')
 parser.add_argument('--seed',type=int,default=1234)
 parser.add_argument('--id',default='Wav2letter training',help='Tensorboard id')
-parser.add_argument('--no-model-save',default=False,action='store_true',help='disable model saving entirely')
-parser.add_argument('--model-path',default='models/wav2letter.pth.tar')
+parser.add_argument('--model-dir',default='models/wav2letter',help='Directory to save models. Set as empty, or use --no-model-save to disable saving.')
+parser.add_argument('--no-model-save',dest='model-dir',action='store_const',const='')
 parser.add_argument('--layers',default=16,type=int,help='Number of Conv1D blocks, between 3 and 16. Last 2 layers are always added.')
 parser.add_argument('--labels',default='english',type=str,help='Name of label set to use')
 parser.add_argument('--print-samples',default=False,action='store_true',help='Print samples from each epoch')
 parser.add_argument('--continue-from',default='',type=str,help='Continue training a saved model')
 parser.add_argument('--cuda',default=False,action='store_true',help='Enable training and evaluation with GPU')
-
+parser.add_argument('--epochs-per-save',default=5,type=int,help='How many epochs before saving models')
 def get_audio_conf(args):
     audio_conf = {k:args[k] for k in ['sample_rate','window_size','window_stride','window']}
     return audio_conf
@@ -88,21 +90,26 @@ def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset
     print('Train dataset size:%d' % len(train_dataset.ids))
     batch_count = math.ceil(len(train_dataset) / kwargs['batch_size'])
     for epoch in range(epochs):
-        model.train()
-        total_loss = 0
-        for idx, data in tqdm.tqdm(enumerate(train_batch_loader)):
-            inputs, input_lengths, targets, target_lengths, file_paths, texts = data
-            out = model(torch.FloatTensor(inputs).to(device))
-            out = out.transpose(1,0)
-            output_lengths = [l // scaling_factor for l in input_lengths]
-            loss = criterion(out, targets.to(device), torch.IntTensor(output_lengths), torch.IntTensor(target_lengths))
-            optimizer.zero_grad()
-            loss.mean().backward()
-            optimizer.step()
-            total_loss += loss.mean().item()
-        log_loss_to_tensorboard(epoch, total_loss / batch_count)
-        evaluate(model,eval_dataset,greedy_decoder,epoch,kwargs)
-    save_model(model, kwargs['model_path'], not kwargs['no_model_save'])
+        with timing.EpochTimer(epoch,_log_to_tensorboard) as et:
+            model.train()
+            total_loss = 0
+            for idx, data in et.across_epoch('Data Loading', tqdm.tqdm(enumerate(train_batch_loader))):
+                inputs, input_lengths, targets, target_lengths, file_paths, texts = data
+                with et.timed_action('Model execution'):
+                    out = model(torch.FloatTensor(inputs).to(device))
+                out = out.transpose(1,0)
+                output_lengths = [l // scaling_factor for l in input_lengths]
+                with et.timed_action('Loss and BP'):
+                    loss = criterion(out, targets.to(device), torch.IntTensor(output_lengths), torch.IntTensor(target_lengths))
+                    optimizer.zero_grad()
+                    loss.mean().backward()
+                    optimizer.step()
+                total_loss += loss.mean().item()
+            log_loss_to_tensorboard(epoch, total_loss / batch_count)
+            evaluate(model,eval_dataset,greedy_decoder,epoch,kwargs)
+            save_epoch_model(model,epoch, kwargs['model_dir'])
+    if kwargs['model_dir']:
+        save_model(model, kwargs['model_dir']+'/final.pth')
     print('Finished at %s' % time.asctime())
     
 
@@ -151,13 +158,24 @@ def _log_to_tensorboard(epoch,values,tensorboard_id='Wav2Letter training'):
     if _tensorboard_writer:
         _tensorboard_writer.add_scalars(tensorboard_id,values,epoch+1)
     
-def save_model(model,path,should_save):
-    if not should_save:
+def save_model(model, path):
+    if not path:
         return
     print('saving model to %s' % path)
     os.makedirs(os.path.dirname(path),exist_ok=True)
     package = Wav2Letter.serialize(model)
     torch.save(package, path)
+    
+def save_epoch_model(model, epoch, path):
+    if not path:
+        return
+    dirname = os.path.splitext(path)[0]
+    model_path = os.path.join(dirname,'epoch_%d.pth' % epoch)
+    save_model(model, model_path)
+    old_files = sorted(glob.glob(dirname+'\\*'),key=os.path.getmtime,reverse=True)[10:]
+    for file in old_files:
+        os.remove(file)
+    
     
 if __name__ == '__main__':
     arguments = parser.parse_args()
