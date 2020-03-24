@@ -1,21 +1,20 @@
 # -*- coding: utf-8 -*-
 
-import librosa
 import torch
 import numpy as np
 import argparse
 import time
-import datetime
-import tandom
+import random
 from model import Wav2Letter
 from data.data_loader import SpectrogramDataset
 from decoder import GreedyDecoder, PrefixBeamSearchLMDecoder
 
 parser = argparse.ArgumentParser(description='Wav2Letter evaluation')
-parser.add_argument('--val-manifest',metavar='DIR',help='path to validation manifest csv', default='data/validation.csv')
+parser.add_argument('--test-manifest',metavar='DIR',help='path to test manifest csv', default='data/test.csv')
 parser.add_argument('--cuda',default=False,dest='cuda',action='store_true',help='Use cuda to execute model')
 parser.add_argument('--seed',type=int,default=1337)
 parser.add_argument('--print-samples', default=False, action='store_true',help='Print some samples to output')
+parser.add_argument('--print-all',default=False,action='store_true',help='Print all samples to output')
 parser.add_argument('--model-path',type=str, default='',help='Path to model.tar to evaluate')
 parser.add_argument('--decoder',type=str,default='greedy',help='Type of decoder to use.  "greedy", or "beam". If "beam", can specify LM with to use with "--lm-path"')
 parser.add_argument('--lm-path',type=str,default='',help='Path to arpa lm file to use for testing. Default is no LM.')
@@ -45,7 +44,7 @@ def test(**kwargs):
     model = Wav2Letter.load_model(kwargs['model_path'])
     model.to(device)
     model.eval()
-    dataset = SpectrogramDataset(mdoel.audio_conf,kwargs['val_manifest'],model.labels)
+    dataset = SpectrogramDataset(kwargs['test_manifest'],model.audio_conf,model.labels)
     decoder = get_decoder(kwargs['decoder'],kwargs['lm_path'],model.labels,get_beam_search_params(kwargs['beam_search_params']))
     with torch.no_grad():
         num_samples = len(dataset)
@@ -57,15 +56,15 @@ def test(**kwargs):
             out = model(torch.FloatTensor(inputs).unsqueeze(0).to(device))
             out_sizes = torch.IntTensor([out.size(1)])
             predicted_texts = decoder.decode(probs=out,sizes=out_sizes)[0]
-            cer[idx] = decoder.cer(text, predicted_texts)
-            wer[idx] = decoder.wer(text, predicted_texts)
-            if idx == index_ro_print and kwargs['print_samples']:
+            cer[idx] = decoder.cer_ratio(text, predicted_texts)
+            wer[idx] = decoder.wer_ratio(text, predicted_texts)
+            if (idx == index_to_print and kwargs['print_samples']) or kwargs['print_all']:
                 print(text)
                 print('Decoder result: ' + predicted_texts)
-                print('Raw acoustic: ' + ''.join(map(lambda i:model.labels[i], torch.max(out.squeeze(), 1).indices)))
+                print('Raw acoustic: ' + ''.join(map(lambda i: model.labels[i], torch.argmax(out.squeeze(), 1))))
     print('CER:%f, WER:%f' % (cer.mean(),wer.mean()))
     
-def set_random_seds(seed=1337):
+def set_random_seeds(seed=1337):
     random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)

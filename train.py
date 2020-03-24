@@ -36,13 +36,14 @@ parser.add_argument('--log-dir',default='visualize/wav2letter',type=str,help='Di
 parser.add_argument('--seed',type=int,default=1234)
 parser.add_argument('--id',default='Wav2letter training',help='Tensorboard id')
 parser.add_argument('--model-dir',default='models/wav2letter',help='Directory to save models. Set as empty, or use --no-model-save to disable saving.')
-parser.add_argument('--no-model-save',dest='model-dir',action='store_const',const='')
-parser.add_argument('--layers',default=16,type=int,help='Number of Conv1D blocks, between 3 and 16. Last 2 layers are always added.')
+parser.add_argument('--no-model-save',dest='model_dir',action='store_const',const='')
+parser.add_argument('--layers',default=1,type=int,help='Number of Conv1D blocks, between 1 and 16. 2 Additional last layers are always added.')
 parser.add_argument('--labels',default='english',type=str,help='Name of label set to use')
 parser.add_argument('--print-samples',default=False,action='store_true',help='Print samples from each epoch')
 parser.add_argument('--continue-from',default='',type=str,help='Continue training a saved model')
 parser.add_argument('--cuda',default=False,action='store_true',help='Enable training and evaluation with GPU')
 parser.add_argument('--epochs-per-save',default=5,type=int,help='How many epochs before saving models')
+
 def get_audio_conf(args):
     audio_conf = {k:args[k] for k in ['sample_rate','window_size','window_stride','window']}
     return audio_conf
@@ -61,10 +62,10 @@ def init_model(kwargs):
     return model
 
 def init_datasets(audio_conf,labels, kwargs):
-    train_dataset = SpectrogramDataset(audio_conf,kwargs['train_manifest'], labels)
+    train_dataset = SpectrogramDataset(kwargs['train_manifest'], audio_conf, labels)
     batch_sampler = BatchSampler(SequentialSampler(train_dataset), batch_size=kwargs['batch_size'], drop_last=False)
     train_batch_loader = BatchAudioDataLoader(train_dataset, batch_sampler=batch_sampler)
-    eval_dataset = SpectrogramDataset(audio_conf,kwargs['val_manifest'], labels)
+    eval_dataset = SpectrogramDataset(kwargs['val_manifest'], audio_conf, labels)
     return train_dataset, train_batch_loader, eval_dataset
     
 
@@ -87,7 +88,7 @@ def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset
     optimizer = torch.optim.SGD(parameters,lr=kwargs['lr'],momentum=kwargs['momentum'],nesterov=True,weight_decay=1e-5)
     scaling_factor = model.get_scaling_factor()
     epochs=kwargs['epochs']
-    print('Train dataset size:%d' % len(train_dataset.ids))
+    print('Train dataset size:%d' % len(train_dataset))
     batch_count = math.ceil(len(train_dataset) / kwargs['batch_size'])
     for epoch in range(epochs):
         with timing.EpochTimer(epoch,_log_to_tensorboard) as et:
@@ -107,7 +108,8 @@ def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset
                 total_loss += loss.mean().item()
             log_loss_to_tensorboard(epoch, total_loss / batch_count)
             evaluate(model,eval_dataset,greedy_decoder,epoch,kwargs)
-            save_epoch_model(model,epoch, kwargs['model_dir'])
+            if epoch != 0 and epoch % kwargs['epochs_per_save'] == 0 :
+                save_epoch_model(model,epoch, kwargs['model_dir'])
     if kwargs['model_dir']:
         save_model(model, kwargs['model_dir']+'/final.pth')
     print('Finished at %s' % time.asctime())

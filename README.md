@@ -17,14 +17,7 @@ an Anaconda installation on Ubuntu.
 
 Install [PyTorch](https://github.com/pytorch/pytorch#installation) if you haven't already.
 
-Install pytorch audio (if on windows, see note):
-```
-sudo apt-get install sox libsox-dev libsox-fmt-all
-git clone https://github.com/pytorch/audio.git
-cd audio
-pip install cffi
-python setup.py install
-```
+Install [Librosa](https://librosa.github.io/librosa/index.html).
 
 Finally clone this repo and run this within the repo:
 ```
@@ -32,7 +25,7 @@ pip install -r requirements.txt
 ```
 ## Windows installation
 
-As of March 11, the repo runs correctly on a Windows 10 machine. We expect to keep Windows support for the forseeable future.
+As of March 24, the repo runs correctly on a Windows 10 machine. We expect to keep Windows support for the forseeable future.
 
 However, Windows is recommended only for spot checks - for actual training, use Linux.
 
@@ -40,13 +33,17 @@ We recommend installing PyTorch with an Anaconda installation, and Microsoft Vis
 
 Tensorboard has not been tested on windows yet, so we recommend running with --no-tensorboard.
 
-As of March 11, torchaudio does not support Windows, however it is [in progress](https://github.com/pytorch/audio/issues/425)
-
 # Usage
 
-### Custom Dataset
+### LibriSpeech Dataset
+Download the dataset you want to use from [openslr](http://www.openslr.org/12/).
+Run ```data/prepare_librispeech.py``` on the downloaded tar.gz file.
 
-To create a custom dataset you must create a CSV file containing the locations of the training data. This has to be in the format of:
+For example:  ```python wav2letter_torch/data/prep_librispeech.py --zip_file dev-clean.tar.gz --extracted_dir dev-clean --target_dir dataset --manifest_path df.csv```
+
+### Custom Datasets
+To create a custom dataset, create a CSV file containing audio location and text pairs.
+This can be in the following format:
 
 ```
 /path/to/audio.wav,transcription
@@ -54,7 +51,13 @@ To create a custom dataset you must create a CSV file containing the locations o
 ...
 ```
 
-The first path is to the audio file, and the second is the text containing the transcript on one line. This can then be used as stated below.
+Alternatively, create a Pandas Dataframe with the columns ```filepath, text``` and save it using ``` df.to_csv(path) ```.
+
+### Different languages
+In addition to English, Hebrew, Farsi, and Arabic (MSA) are supported.
+
+To use, run with ```--labels hebrew```. Note that some terminals and consoles do not display UTF-8 properly.
+
 
 ## Training
 
@@ -69,6 +72,10 @@ There is [Tensorboard](https://github.com/lanpa/tensorboard-pytorch) support to 
 ```
 python train.py --tensorboard --logdir log_dir/ # Make sure the Tensorboard instance is made pointing to this log directory
 ```
+### Continue training existing model
+To continue training from an existing model, run with ```--continue-from MODEL_PATH```.
+
+Note that ```--layers, --labels, --window_size, --window_stride, --window, --sample_rate``` are all determined from the configuration of the loaded model, and are ignored. 
 
 ## Testing/Inference
 
@@ -77,6 +84,10 @@ To evaluate a trained model on a test set (has to be in the same format as the t
 ```
 python test.py --model-path models/wav2Letter.pth --test-manifest /path/to/test_manifest.csv --cuda
 ```
+
+To see the decoded outputs compared to the test data, run with either ```--print-samples``` or ```print-all```.
+
+You can use a LM during decoding. The LM is expected to be a valid ARPA model, loaded with kenlm. Add ```--lm-path``` to use it. See ```--beam-search-params``` to fine tune your parameters for beam search.
 
 ## Acknowledgements
 This work was originally based off [Silversparro's Wav2Letter](https://github.com/silversparro/wav2letter.pytorch).
