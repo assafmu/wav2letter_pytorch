@@ -94,13 +94,13 @@ def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset
         with timing.EpochTimer(epoch,_log_to_tensorboard) as et:
             model.train()
             total_loss = 0
-            for idx, data in et.across_epoch('Data Loading', tqdm.tqdm(enumerate(train_batch_loader))):
+            for idx, data in et.across_epoch('Data Loading time', tqdm.tqdm(enumerate(train_batch_loader))):
                 inputs, input_lengths, targets, target_lengths, file_paths, texts = data
-                with et.timed_action('Model execution'):
+                with et.timed_action('Model execution time'):
                     out = model(torch.FloatTensor(inputs).to(device))
                 out = out.transpose(1,0)
                 output_lengths = [l // scaling_factor for l in input_lengths]
-                with et.timed_action('Loss and BP'):
+                with et.timed_action('Loss and BP time'):
                     loss = criterion(out, targets.to(device), torch.IntTensor(output_lengths), torch.IntTensor(target_lengths))
                     optimizer.zero_grad()
                     loss.mean().backward()

@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Sun Mar 22 10:02:23 2020
-
-@author: User
-"""
 hebrew_replacements = [('צ ','ץ '),
                        ('פ ','ף '),
                        ('כ ','ך '),

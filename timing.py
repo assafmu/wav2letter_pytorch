@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Wed Mar 18 10:39:23 2020
-
-@author: User
-"""
 import time
 import random
 from collections import defaultdict

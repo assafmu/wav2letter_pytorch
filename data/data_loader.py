@@ -17,7 +17,7 @@ windows = {'hamming': scipy.signal.hamming, 'hann': scipy.signal.hann, 'blackman
 
 def load_audio(path):
     sr, sound = wavfile.read(path)
-    sound = sound.astype('float32') / 32767
+    sound = sound.astype('float32') / (2**15 -1)
     if len(sound.shape) > 1:
         if sound.shape[1] == 1:
             sound = sound.squeeze()

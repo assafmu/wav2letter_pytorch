@@ -7,10 +7,10 @@ import torch.nn.functional as F
 import numpy as np
 
 class Conv1dBlock(nn.Module):
-    def __init__(self,input_size,output_size,kernel_size,stride,drop_out_prob=-1.0,dilation=1,padding='same',bn=True,activation_use=True):
+    def __init__(self,input_channels,output_channels,kernel_size,stride,drop_out_prob=-1.0,dilation=1,bn=True,activation_use=True):
         super(Conv1dBlock, self).__init__()
-        self.input_size = input_size
-        self.output_size = output_size
+        self.input_channels = input_channels
+        self.output_channels = output_channels
         self.kernel_size = kernel_size
         self.stride = stride
         self.drop_out_prob = drop_out_prob
@@ -18,26 +18,19 @@ class Conv1dBlock(nn.Module):
         self.activation_use = activation_use
         self.padding = kernel_size[0]
         '''Padding Calculation'''
-        input_rows = input_size
+        input_rows = input_channels
         filter_rows = kernel_size[0]
         effective_filter_size_rows = (filter_rows - 1) * dilation + 1
         out_rows = (input_rows + stride - 1) // stride
         self.rows_odd = False
-        if padding=='same':
-            self.padding_needed = max(0,(out_rows -1) * stride + effective_filter_size_rows - input_rows)
-            self.padding_rows = max(0, (out_rows -1) * stride + (filter_rows -1) * dilation + 1 - input_rows)
-            self.rows_odd = (self.padding_rows % 2 != 0)
-            self.addPaddings = self.padding_rows
-        elif padding=='half':
-            self.addPaddings = kernel_size[0]
-        elif padding=='invalid':
-            self.addPaddings = 0
+        self.padding_needed = max(0,(out_rows -1) * stride + effective_filter_size_rows - input_rows)
+        self.padding_rows = max(0, (out_rows -1) * stride + (filter_rows -1) * dilation + 1 - input_rows)
+        self.rows_odd = (self.padding_rows % 2 != 0)
+        self.addPaddings = self.padding_rows
         self.paddingAdded = nn.ReflectionPad1d(self.addPaddings //2) if self.addPaddings > 0 else None
-        self.conv1 = nn.Sequential(
-                nn.Conv1d(in_channels=input_size,out_channels=output_size,
+        self.conv1 = nn.Conv1d(in_channels=input_channels,out_channels=output_channels,
                           kernel_size=kernel_size,stride=stride,padding=0,dilation=dilation)
-        )
-        self.batch_norm = nn.BatchNorm1d(num_features=output_size,momentum=0.9,eps=0.001) if bn else None
+        self.batch_norm = nn.BatchNorm1d(num_features=output_channels,momentum=0.9,eps=0.001) if bn else None
         self.drop_out = nn.Dropout(drop_out_prob) if self.drop_out_prob != -1 else None
 
     def forward(self,xs):
@@ -54,7 +47,7 @@ class Conv1dBlock(nn.Module):
         return output
 
 class Wav2Letter(nn.Module):
-    def __init__(self,labels='abc',audio_conf=None,mid_layers=16):
+    def __init__(self,labels='abc',audio_conf=None,mid_layers=1):
         super(Wav2Letter,self).__init__()
         self.audio_conf = audio_conf
         self.labels = labels
@@ -63,44 +56,33 @@ class Wav2Letter(nn.Module):
         nfft = (self.audio_conf['sample_rate'] * self.audio_conf['window_size'])
         input_size = int(1+(nfft/2))
 
-        conv1 = Conv1dBlock(input_size=input_size,output_size=256,kernel_size=(11,),stride=2,dilation=1,drop_out_prob=0.2,padding='same')
+        conv1 = Conv1dBlock(input_channels=input_size,output_channels=256,kernel_size=(11,),stride=2,dilation=1,drop_out_prob=0.2)
         conv2s = []
         conv2s.append(('conv1d_0',conv1))
-        layer_size = conv1.output_size
-        for idx in range(mid_layers):
-            layer_group = idx //3
-            if layer_group == 0:
-                layer = Conv1dBlock(input_size=layer_size,output_size=256,kernel_size=(11,),stride=1,dilation=1,drop_out_prob=0.2,padding='same')
-                conv2s.append(('conv1d_{}'.format(idx+1),layer))
-                layer_size = layer.output_size
-            elif layer_group == 1:
-                layer = Conv1dBlock(input_size=layer_size,output_size=384,kernel_size=(13,),stride=1,dilation=1,drop_out_prob=0.2)
-                conv2s.append(('conv1d_{}'.format(idx+1),layer))
-                layer_size = layer.output_size
-            elif layer_group == 2:
-                layer = Conv1dBlock(input_size=layer_size,output_size=512,kernel_size=(17,),stride=1,dilation=1,drop_out_prob=0.2)
-                conv2s.append(('conv1d_{}'.format(idx+1),layer))
-                layer_size = layer.output_size
-            elif layer_group == 3:
-                layer = Conv1dBlock(input_size=layer_size,output_size=640,kernel_size=(21,),stride=1,dilation=1,drop_out_prob=0.3)
-                conv2s.append(('conv1d_{}'.format(idx+1),layer))
-                layer_size = layer.output_size
-            elif layer_group == 4:
-                layer = Conv1dBlock(input_size=layer_size,output_size=768,kernel_size=(25,),stride=1,dilation=1,drop_out_prob=0.3)
-                conv2s.append(('conv1d_{}'.format(idx+1),layer))
-                layer_size = layer.output_size
-            elif layer_group == 5:
-                layer = Conv1dBlock(input_size=layer_size,output_size=896,kernel_size=(29,),stride=1,dilation=2,drop_out_prob=0.4)
-                conv2s.append(('conv1d_{}'.format(idx+1),layer))
-                layer_size = layer.output_size
-
-        layer = Conv1dBlock(input_size=layer_size, output_size=1024, kernel_size=(1,), stride=1,dilation=1,drop_out_prob=0.4)
-        conv2s.append(('conv1d_{}'.format(mid_layers+1),layer))
-        layer_size = layer.output_size
-        layer = Conv1dBlock(input_size=layer_size, output_size=len(self.labels), kernel_size=(1,), stride=1,bn=False,activation_use=False)
-        conv2s.append(('conv1d_{}'.format(mid_layers+2),layer))
-
-        self.conv1ds = nn.Sequential(OrderedDict(conv2s))
+        layer_size = conv1.output_channels
+        # Output size, kernel size, stride, dilation, drop_out_prob
+        layers = [(256,11,2,1,0.2),
+                  (256,11,1,1,0.2), (256,11,1,1,0.2), (256,11,1,1,0.2),
+                  (384,13,1,1,0.2), (384,13,1,1,0.2), (384,13,1,1,0.2),
+                  (512,17,1,1,0.2), (512,17,1,1,0.2), (512,17,1,1,0.2),
+                  (640,21,1,1,0.3), (640,21,1,1,0.3), (640,21,1,1,0.3),
+                  (768,25,1,1,0.3), (768,25,1,1,0.3), (768,25,1,1,0.3),
+                  (896,29,1,2,0.4), (896,29,1,2,0.4), (896,29,1,2,0.4),
+                  ]
+        layers = layers[: mid_layers+1] # + 1 for backwards compatability
+        layers.append((1024,1,1,1,0.4)) # not inside the list for backwards compatability
+        conv_blocks = []
+        layer_size = input_size
+        for idx in range(len(layers)):
+            output_channels, kernel_size, stride, dilation, drop_out_prob = layers[idx]
+            layer = Conv1dBlock(input_channels=layer_size,output_channels=output_channels,
+                                kernel_size=(kernel_size,),stride=stride,
+                                dilation=dilation,drop_out_prob=drop_out_prob)
+            layer_size=output_channels
+            conv_blocks.append(('conv1d_{}'.format(idx),layer))
+        last_layer = Conv1dBlock(input_channels=layer_size, output_channels=len(self.labels), kernel_size=(1,), stride=1,bn=False,activation_use=False)
+        conv_blocks.append(('conv1d_{}'.format(len(layers)),last_layer))
+        self.conv1ds = nn.Sequential(OrderedDict(conv_blocks))
 
     def forward(self, x):
         x = self.conv1ds(x)
@@ -114,7 +96,7 @@ class Wav2Letter(nn.Module):
     def get_scaling_factor(self):
         strides = []
         for module in self.conv1ds.children():
-            strides.append(module.conv1[0].stride[0])
+            strides.append(module.conv1.stride[0])
         return np.prod(strides)
     
     @classmethod

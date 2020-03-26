@@ -12,11 +12,10 @@ farsi_labels = ['\u0623','\u0627','\u0628','\u067e','\u062a','\u062b','\u062c',
 '\u0641','\u0642','\u06a9','\u06af','\u0644','\u0645','\u0646','\u0648',
 '\u0647','\u06cc']
 
-arabic_labels =[chr(256*6 + i) for i in range(256)]
 
 labels_map = {'english':english_labels,'hebrew':hebrew_labels,
-              'arabic':arabic_labels,'farsi':farsi_labels}
+              'farsi':farsi_labels}
 for lang in labels_map:
     labels = labels_map[lang]
-    labels.insert(0,'_')
+    labels.insert(0,'_') # CTC blank label. By default, blank index is 0.
     labels.append(' ')
