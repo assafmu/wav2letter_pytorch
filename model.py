@@ -1,10 +1,19 @@
 # -*- coding: utf-8 -*-
 from collections import OrderedDict
-
+import librosa
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+
+try:
+    identity = nn.Identity
+except AttributeError as e: #PyTorch <1.1.0 support
+    class identity(nn.Module):
+        def __init__(self,*args,**kwargs):
+            super(identity,self).__init__()
+        def forward(self,xs):
+            return xs
 
 class Conv1dBlock(nn.Module):
     def __init__(self,input_channels,output_channels,kernel_size,stride,drop_out_prob=-1.0,dilation=1,bn=True,activation_use=True):
@@ -22,28 +31,21 @@ class Conv1dBlock(nn.Module):
         filter_rows = kernel_size[0]
         effective_filter_size_rows = (filter_rows - 1) * dilation + 1
         out_rows = (input_rows + stride - 1) // stride
-        self.rows_odd = False
         self.padding_needed = max(0,(out_rows -1) * stride + effective_filter_size_rows - input_rows)
         self.padding_rows = max(0, (out_rows -1) * stride + (filter_rows -1) * dilation + 1 - input_rows)
-        self.rows_odd = (self.padding_rows % 2 != 0)
-        self.addPaddings = self.padding_rows
-        self.paddingAdded = nn.ReflectionPad1d(self.addPaddings //2) if self.addPaddings > 0 else None
+        self.paddingAdded = nn.ReflectionPad1d(self.padding_rows //2) if self.padding_rows > 0 else identity()
         self.conv1 = nn.Conv1d(in_channels=input_channels,out_channels=output_channels,
                           kernel_size=kernel_size,stride=stride,padding=0,dilation=dilation)
-        self.batch_norm = nn.BatchNorm1d(num_features=output_channels,momentum=0.9,eps=0.001) if bn else None
-        self.drop_out = nn.Dropout(drop_out_prob) if self.drop_out_prob != -1 else None
+        self.batch_norm = nn.BatchNorm1d(num_features=output_channels,momentum=0.9,eps=0.001) if bn else identity()
+        self.drop_out = nn.Dropout(drop_out_prob) if self.drop_out_prob != -1 else identity()
 
     def forward(self,xs):
-        if self.paddingAdded is not None:
-            xs = self.paddingAdded(xs)
+        xs = self.paddingAdded(xs)
         output = self.conv1(xs)
-        if self.batch_norm is not None:
-            output = self.batch_norm(output)
+        output = self.batch_norm(output)
+        output = self.drop_out(output)
         if self.activation_use:
             output = torch.clamp(input=output,min=0,max=20)
-        if self.drop_out is not None:
-            output = self.drop_out(output)
-
         return output
 
 class Wav2Letter(nn.Module):

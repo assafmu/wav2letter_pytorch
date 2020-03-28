@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import librosa
 import torch
 import torch.nn as nn
 import numpy as np
@@ -94,7 +95,7 @@ def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset
         with timing.EpochTimer(epoch,_log_to_tensorboard) as et:
             model.train()
             total_loss = 0
-            for idx, data in et.across_epoch('Data Loading time', tqdm.tqdm(enumerate(train_batch_loader))):
+            for idx, data in et.across_epoch('Data Loading time', tqdm.tqdm(enumerate(train_batch_loader),total=batch_count)):
                 inputs, input_lengths, targets, target_lengths, file_paths, texts = data
                 with et.timed_action('Model execution time'):
                     out = model(torch.FloatTensor(inputs).to(device))
@@ -174,7 +175,7 @@ def save_epoch_model(model, epoch, path):
     dirname = os.path.splitext(path)[0]
     model_path = os.path.join(dirname,'epoch_%d.pth' % epoch)
     save_model(model, model_path)
-    old_files = sorted(glob.glob(dirname+'\\*'),key=os.path.getmtime,reverse=True)[10:]
+    old_files = sorted(glob.glob(dirname+'/epoch_*'),key=os.path.getmtime,reverse=True)[10:]
     for file in old_files:
         os.remove(file)
     
