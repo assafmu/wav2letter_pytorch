@@ -1,6 +1,12 @@
-python-levenshtein
+numpy
+pandas
 librosa
 tqdm
 pytorch
 six
 scipy
+glob2
+#The following libraries require Microsoft Visual Build C++ Tools on windows. Should check requirements on Linux.
+python-levenshtein
+# Install this version of kenlm. Seems to be easier to install on windows.
+https://github.com/kpu/kenlm/archive/master.zip
