@@ -355,7 +355,6 @@ class JasperBlock(nn.Module):
                 ),
             ]
         else:
-            print('Non separable called')
             layers = [
                 self._get_conv(
                     in_channels,
@@ -400,7 +399,7 @@ class JasperBlock(nn.Module):
             xs, lens_orig = input_
 
         # compute forward convolutions
-        out = xs[-1]
+        out = xs#[-1]
 
         lens = lens_orig
         for i, l in enumerate(self.mconv):
@@ -415,7 +414,7 @@ class JasperBlock(nn.Module):
         # compute the residuals
         if self.res is not None:
             for i, layer in enumerate(self.res):
-                res_out = xs[i]
+                res_out = xs#[i]
                 for j, res_layer in enumerate(layer):
                     if isinstance(res_layer, MaskedConv1d):
                         res_out, _ = res_layer(res_out, lens_orig)
@@ -432,11 +431,82 @@ class JasperBlock(nn.Module):
         if self.res is not None and self.dense_residual:
             return xs + [out], lens
 
-        return [out], lens
+        return out, lens
     
+    
+class MiniJasper(nn.Module):
+    def __init__(self,labels='abc',audio_conf=None,mid_layers=1,input_size=None):
+        super(MiniJasper,self).__init__()
+        self.labels=labels
+        self.audio_conf = audio_conf # For consistency with other models
+        self.mid_layers = mid_layers
+        if not input_size:
+            nfft = (self.audio_conf['sample_rate'] * self.audio_conf['window_size'])
+            input_size = int(1+(nfft/2))
+        self.input_size = input_size
+        #Jasper blocks created by "JasperEncoder"
+        #Bad code, but replicates QuartzNet layout. Need to refactor, a lot.
+        blocks = [
+                JasperBlock(input_size,256,kernel_size=(32,),stride=[2],dilation=[1],residual=False,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0),
+                JasperBlock(256,256,kernel_size=(32,),stride=[1],dilation=[1],residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0),
+                JasperBlock(256,256,kernel_size=(32,),stride=[1],dilation=[1],residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0),
+                JasperBlock(256,256,kernel_size=(32,),stride=[1],dilation=[1],residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0),
+                JasperBlock(256,256,kernel_size=(38,),stride=[1],dilation=[1],residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0),
+                JasperBlock(256,256,kernel_size=(38,),stride=[1],dilation=[1],residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0),
+                JasperBlock(256,256,kernel_size=(38,),stride=[1],dilation=[1],residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0),
+                JasperBlock(256,512,kernel_size=(50,),stride=[1],dilation=[1],residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0),
+                JasperBlock(512,512,kernel_size=(50,),stride=[1],dilation=[1],residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0),
+                JasperBlock(512,512,kernel_size=(50,),stride=[1],dilation=[1],residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0),
+                JasperBlock(512,512,kernel_size=(62,),stride=[1],dilation=[1],residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0),
+                JasperBlock(512,512,kernel_size=(62,),stride=[1],dilation=[1],residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0),
+                JasperBlock(512,512,kernel_size=(62,),stride=[1],dilation=[1],residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0),
+                JasperBlock(512,512,kernel_size=(74,),stride=[1],dilation=[1],residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0),
+                JasperBlock(512,1024,kernel_size=(1,),stride=[1],dilation=[1],residual=False,repeat=1,conv_mask=True,activation=torch.nn.ReLU(),dropout=0.0)
+                
+                ]
+        #self.almost_all_jasper = nn.Sequential(*[zero_block,blocks_123,blocks_456,blocks_7,blocks_89,blocks_101112,blocks_13,blocks_14][:mid_layers])
+        self.jasper_encoder = nn.Sequential(*blocks[:mid_layers])
+        #Last layer, created by JasperDecoder
+        last_layer_input_size = self.jasper_encoder[-1].mconv[-1].num_features
+        self.final_layer = nn.Sequential(nn.Conv1d(last_layer_input_size,len(labels),kernel_size=(1,),stride=1)) #Our labels already include blank
+        
+        
+    def forward(self,xs):
+        '''
+        Tuple: ([Batches X channels X length], lengths)
+        '''
+        jasper_res = self.final_layer(self.jasper_encoder(xs)[0])
+        jasper_res = jasper_res.transpose(2,1) # For consistency with other models.
+        return jasper_res # [Batches X Labels X Time (padded to max)]
+    
+    def get_scaling_factor(self):
+        return 2 # this is incorrect, but will work... for now.
+    
+    @classmethod
+    def load_model(cls,path):
+        package = torch.load(path,map_location = lambda storage, loc: storage)
+        return cls.load_model_package(package)
+    
+    @classmethod
+    def load_model_package(cls,package):
+        model = cls(labels=package['labels'],audio_conf=package['audio_conf'],mid_layers=package['layers'],input_size=package['input_size'])
+        model.load_state_dict(package['state_dict'])
+        return model
+
+    @staticmethod
+    def serialize(model):
+        package = {
+                'audio_conf':model.audio_conf,
+                'labels':model.labels,
+                'layers':model.mid_layers,
+                'state_dict':model.state_dict(),
+                'input_size':model.input_size
+                }
+        return package
+
     
 if __name__=='__main__':
-    #%%
+    #
     #Jasper blocks created by "JasperEncoder"
     zero_block = JasperBlock(64,256,kernel_size=(32,),stride=[2],dilation=[1],residual=False,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0)
     blocks_123 = JasperBlock(256,256,kernel_size=(32,),stride=[1],dilation=[1],residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0)
@@ -455,11 +525,14 @@ if __name__=='__main__':
     max_length_of_audio = 79 #computed from data loader
     first_channels = zero_block.mconv[0].conv.in_channels #must be consistent with network!
     num_labels = final_layer[0].out_channels 
-    inp = [[torch.ones(batch_size,first_channels,max_length_of_audio)],torch.randint(max_length_of_audio,(batch_size,))]
+    inp = [torch.ones(batch_size,first_channels,max_length_of_audio),torch.randint(max_length_of_audio,(batch_size,))]
     #inp = [torch.ones(1,64,1000,80)],torch.randint(5,(10,))
     
     #zero_block(inp)
-    jasper_res = final_layer(almost_all_jasper(inp)[0][0])
-    
+    jasper_res = final_layer(almost_all_jasper(inp)[0])
+    import math
     max_output_length = math.ceil(max_length_of_audio/zero_block.mconv[0].conv.stride[0])
-    jasper_res.shape == torch.Size((batch_size,num_labels,max_output_length))
+    assert jasper_res.shape == torch.Size((batch_size,num_labels,max_output_length))
+    mini_jasper = MiniJasper(range(77),input_size=64)
+    alt_res = mini_jasper(inp)
+    assert jasper_res.shape == alt_res.transpose(2,1).shape

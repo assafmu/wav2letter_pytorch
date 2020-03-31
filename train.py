@@ -15,6 +15,7 @@ import glob
 
 from data import label_sets
 from model import Wav2Letter
+from jasper import MiniJasper
 from data.data_loader import SpectrogramDataset, BatchAudioDataLoader
 from decoder import GreedyDecoder, PrefixBeamSearchLMDecoder
 import timing
@@ -52,7 +53,8 @@ def get_audio_conf(args):
 def init_new_model(kwargs):
     labels = label_sets.labels_map[kwargs['labels']]
     audio_conf = get_audio_conf(kwargs)
-    model = Wav2Letter(labels=labels,audio_conf=audio_conf,mid_layers=kwargs['layers'])
+    #model = Wav2Letter(labels=labels,audio_conf=audio_conf,mid_layers=kwargs['layers'])
+    model = MiniJasper(labels=labels,audio_conf=audio_conf,mid_layers=kwargs['layers'])
     return model
 
 def init_model(kwargs):
@@ -74,6 +76,7 @@ def train(**kwargs):
     print('starting at %s' % time.asctime())
     model = init_model(kwargs)
     train_dataset, train_batch_loader, eval_dataset = init_datasets(model.audio_conf, model.labels, kwargs)
+    print('Model and datasets initialized')
     if kwargs['tensorboard']:
         setup_tensorboard(kwargs['log_dir'])
     training_loop(model,kwargs, train_dataset, train_batch_loader, eval_dataset)   
@@ -98,7 +101,7 @@ def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset
             for idx, data in et.across_epoch('Data Loading time', tqdm.tqdm(enumerate(train_batch_loader),total=batch_count)):
                 inputs, input_lengths, targets, target_lengths, file_paths, texts = data
                 with et.timed_action('Model execution time'):
-                    out = model(torch.FloatTensor(inputs).to(device))
+                    out = model((torch.FloatTensor(inputs).to(device),torch.IntTensor(input_lengths)))
                 out = out.transpose(1,0)
                 output_lengths = [l // scaling_factor for l in input_lengths]
                 with et.timed_action('Loss and BP time'):
@@ -130,7 +133,7 @@ def compute_error_rates(model,dataset,greedy_decoder,kwargs):
         greedy_wer = np.zeros(num_samples)
         for idx, (data) in enumerate(dataset):
             inputs, targets, file_paths, text = data
-            out = model(torch.FloatTensor(inputs).unsqueeze(0))
+            out = model((torch.FloatTensor(inputs,).unsqueeze(0).to(device), torch.IntTensor([inputs.shape[1]])))
             out = out.transpose(1,0)
             out_sizes = torch.IntTensor([out.size(0)])
             if idx == index_to_print and kwargs['print_samples']:
