@@ -355,6 +355,7 @@ class JasperBlock(nn.Module):
                 ),
             ]
         else:
+            print('Non separable called')
             layers = [
                 self._get_conv(
                     in_channels,
@@ -432,3 +433,33 @@ class JasperBlock(nn.Module):
             return xs + [out], lens
 
         return [out], lens
+    
+    
+if __name__=='__main__':
+    #%%
+    #Jasper blocks created by "JasperEncoder"
+    zero_block = JasperBlock(64,256,kernel_size=(32,),stride=[2],dilation=[1],residual=False,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0)
+    blocks_123 = JasperBlock(256,256,kernel_size=(32,),stride=[1],dilation=[1],residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0)
+    blocks_456 = JasperBlock(256,256,kernel_size=(38,),stride=[1],dilation=[1],residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0)
+    blocks_7 = JasperBlock(256,512,kernel_size=(50,),stride=[1],dilation=[1],residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0)
+    blocks_89 = JasperBlock(512,512,kernel_size=(50,),stride=[1],dilation=[1],residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0)
+    blocks_101112 = JasperBlock(512,512,kernel_size=(62,),stride=[1],dilation=[1],residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0)
+    blocks_13 = JasperBlock(512,512,kernel_size=(74,),stride=[1],dilation=[1],residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.0)
+    blocks_14 = JasperBlock(512,1024,kernel_size=(1,),stride=[1],dilation=[1],residual=False,repeat=1,conv_mask=True,activation=torch.nn.ReLU(),dropout=0.0)
+    #Last layer, created by JasperDecoder
+    final_layer = nn.Sequential(nn.Conv1d(1024,77,kernel_size=(1,),stride=1))
+    
+    almost_all_jasper = nn.Sequential(zero_block,blocks_123,blocks_456,blocks_7,blocks_89,blocks_101112,blocks_13,blocks_14)
+    
+    batch_size = 11 #Free
+    max_length_of_audio = 79 #computed from data loader
+    first_channels = zero_block.mconv[0].conv.in_channels #must be consistent with network!
+    num_labels = final_layer[0].out_channels 
+    inp = [[torch.ones(batch_size,first_channels,max_length_of_audio)],torch.randint(max_length_of_audio,(batch_size,))]
+    #inp = [torch.ones(1,64,1000,80)],torch.randint(5,(10,))
+    
+    #zero_block(inp)
+    jasper_res = final_layer(almost_all_jasper(inp)[0][0])
+    
+    max_output_length = math.ceil(max_length_of_audio/zero_block.mconv[0].conv.stride[0])
+    jasper_res.shape == torch.Size((batch_size,num_labels,max_output_length))
