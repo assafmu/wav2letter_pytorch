@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+'''
+Copied from https://github.com/NVIDIA/DeepLearningExamples. Specifically,
+https://github.com/NVIDIA/DeepLearningExamples/blob/master/PyTorch/SpeechRecognition/Jasper/optimizers.py
+
+Not original code!
+'''
 
 import torch
 from torch.optim import Optimizer

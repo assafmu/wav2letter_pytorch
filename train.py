@@ -20,6 +20,7 @@ from data.data_loader import SpectrogramDataset, BatchAudioDataLoader
 from decoder import GreedyDecoder, PrefixBeamSearchLMDecoder
 import timing
 from torch.utils.data import BatchSampler, SequentialSampler
+from novograd import Novograd
 
 parser = argparse.ArgumentParser(description='Wav2Letter training')
 parser.add_argument('--train-manifest',help='path to train manifest csv', default='data/train.csv')
@@ -75,10 +76,10 @@ def init_datasets(audio_conf,labels, kwargs):
     return train_dataset, train_batch_loader, eval_dataset
     
 def get_optimizer(params,kwargs):
-    if kwargs['optimizer'] == 'sgd:
-        return torch.optim.SGD(parameters,lr=kwargs['lr'],momentum=kwargs['momentum'],nesterov=True,weight_decay=1e-5)
+    if kwargs['optimizer'] == 'sgd':
+        return torch.optim.SGD(params,lr=kwargs['lr'],momentum=kwargs['momentum'],nesterov=True,weight_decay=1e-5)
     elif kwargs['optimizer'] == 'novograd':
-        return Novograd(parameters,lr=kwargs['lr'])
+        return Novograd(params,lr=kwargs['lr'])
     return None
 
 def train(**kwargs):
