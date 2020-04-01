@@ -45,23 +45,26 @@ parser.add_argument('--print-samples',default=False,action='store_true',help='Pr
 parser.add_argument('--continue-from',default='',type=str,help='Continue training a saved model')
 parser.add_argument('--cuda',default=False,action='store_true',help='Enable training and evaluation with GPU')
 parser.add_argument('--epochs-per-save',default=5,type=int,help='How many epochs before saving models')
+parser.add_argument('--arc',default='quartz',type=str,help='Network architecture to use. Can be either "quartz" (default) or "wav2letter"')
+parser.add_argument('--optimizer',default='sgd',type=str,help='Optimizer to use. can be either "sgd" (default) or "novograd". Note that novograd only accepts --lr parameter.')
 
 def get_audio_conf(args):
     audio_conf = {k:args[k] for k in ['sample_rate','window_size','window_stride','window']}
     return audio_conf
 
-def init_new_model(kwargs):
+def init_new_model(arc,kwargs):
     labels = label_sets.labels_map[kwargs['labels']]
     audio_conf = get_audio_conf(kwargs)
-    #model = Wav2Letter(labels=labels,audio_conf=audio_conf,mid_layers=kwargs['layers'])
-    model = MiniJasper(labels=labels,audio_conf=audio_conf,mid_layers=kwargs['layers'])
+    model = arc(labels=labels,audio_conf=audio_conf,mid_layers=kwargs['layers'])
     return model
 
 def init_model(kwargs):
+    arcs_map = {"quartz":MiniJasper,"wav2letter":Wav2Letter}
+    arc = arcs_map[kwargs['arc']]
     if kwargs['continue_from']:
-        model = Wav2Letter.load_model(kwargs['continue_from'])
+        model = arc.load_model(kwargs['continue_from'])
     else:
-        model = init_new_model(kwargs)
+        model = init_new_model(arc,kwargs)
     return model
 
 def init_datasets(audio_conf,labels, kwargs):
@@ -71,6 +74,12 @@ def init_datasets(audio_conf,labels, kwargs):
     eval_dataset = SpectrogramDataset(kwargs['val_manifest'], audio_conf, labels)
     return train_dataset, train_batch_loader, eval_dataset
     
+def get_optimizer(params,kwargs):
+    if kwargs['optimizer'] == 'sgd:
+        return torch.optim.SGD(parameters,lr=kwargs['lr'],momentum=kwargs['momentum'],nesterov=True,weight_decay=1e-5)
+    elif kwargs['optimizer'] == 'novograd':
+        return Novograd(parameters,lr=kwargs['lr'])
+    return None
 
 def train(**kwargs):
     print('starting at %s' % time.asctime())
@@ -89,7 +98,7 @@ def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset
     greedy_decoder = GreedyDecoder(model.labels)
     criterion = nn.CTCLoss(blank=0,reduction='none')
     parameters = model.parameters()
-    optimizer = torch.optim.SGD(parameters,lr=kwargs['lr'],momentum=kwargs['momentum'],nesterov=True,weight_decay=1e-5)
+    optimizer = get_optimizer(parameters,kwargs)
     scaling_factor = model.get_scaling_factor()
     epochs=kwargs['epochs']
     print('Train dataset size:%d' % len(train_dataset))
@@ -169,7 +178,7 @@ def save_model(model, path):
         return
     print('saving model to %s' % path)
     os.makedirs(os.path.dirname(path),exist_ok=True)
-    package = Wav2Letter.serialize(model)
+    package = model.serialize(model)
     torch.save(package, path)
     
 def save_epoch_model(model, epoch, path):
