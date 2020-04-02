@@ -49,14 +49,15 @@ class Conv1dBlock(nn.Module):
         return output
 
 class Wav2Letter(nn.Module):
-    def __init__(self,labels='abc',audio_conf=None,mid_layers=1):
+    def __init__(self,labels='abc',audio_conf=None,mid_layers=1,input_size=None):
         super(Wav2Letter,self).__init__()
         self.audio_conf = audio_conf
         self.labels = labels
         self.mid_layers = mid_layers
-
-        nfft = (self.audio_conf['sample_rate'] * self.audio_conf['window_size'])
-        input_size = int(1+(nfft/2))
+        if not input_size:
+            nfft = (self.audio_conf['sample_rate'] * self.audio_conf['window_size'])
+            input_size = int(1+(nfft/2))
+        self.input_size = input_size
 
         conv1 = Conv1dBlock(input_channels=input_size,output_channels=256,kernel_size=(11,),stride=2,dilation=1,drop_out_prob=0.2)
         conv2s = []
@@ -108,7 +109,7 @@ class Wav2Letter(nn.Module):
     
     @classmethod
     def load_model_package(cls,package):
-        model = cls(labels=package['labels'],audio_conf=package['audio_conf'],mid_layers=package['layers'])
+        model = cls(labels=package['labels'],audio_conf=package['audio_conf'],mid_layers=package['layers'],package.get('input_size'))
         model.load_state_dict(package['state_dict'])
         return model
 
@@ -118,17 +119,12 @@ class Wav2Letter(nn.Module):
                 'audio_conf':model.audio_conf,
                 'labels':model.labels,
                 'layers':model.mid_layers,
+                'input_size':model.input_size
                 'state_dict':model.state_dict()
                 }
         return package
 
     @staticmethod
     def get_param_size(model):
-        params = 0
-        for p in model.parameters():
-            tmp = 1
-            for x in p.size():
-                tmp*=x
-            params +=tmp
-        return params
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
     
