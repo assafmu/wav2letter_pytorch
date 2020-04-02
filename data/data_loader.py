@@ -48,6 +48,14 @@ class SpectrogramDataset(Dataset):
         self.window = windows.get(audio_conf['window'], windows['hamming'])
         self.labels_map = dict([(labels[i],i) for i in range(len(labels))])
         self.validate_sample_rate()
+        self.preprocess_spectrograms()
+    
+    def preprocess_spectrograms(self):
+        self.spects = {}
+        for i in range(self.size):
+            audio_path = self.df.filepath.iloc[i]
+            spect = self.parse_audio(audio_path)
+            self.spects[i] = spect
         
     def __getitem__(self, index):
         sample = self.df.iloc[index]
@@ -55,7 +63,8 @@ class SpectrogramDataset(Dataset):
         if 'א' in self.labels_map: #Hebrew!
             import data.language_specific_tools
             transcript = data.language_specific_tools.hebrew_final_to_normal(transcript)
-        spect = self.parse_audio(audio_path)
+        #spect = self.parse_audio(audio_path)
+        spect = self.spects[index]
         target = list(filter(None,[self.labels_map.get(x) for x in list(transcript)]))
         return spect, target, audio_path, transcript
     
