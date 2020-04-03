@@ -48,31 +48,35 @@ parser.add_argument('--cuda',default=False,action='store_true',help='Enable trai
 parser.add_argument('--epochs-per-save',default=5,type=int,help='How many epochs before saving models')
 parser.add_argument('--arc',default='quartz',type=str,help='Network architecture to use. Can be either "quartz" (default) or "wav2letter"')
 parser.add_argument('--optimizer',default='sgd',type=str,help='Optimizer to use. can be either "sgd" (default) or "novograd". Note that novograd only accepts --lr parameter.')
+parser.add_argument('--mel-spec-count',default=0,type=int,help='How many channels to use in Mel Spectrogram')
+parser.add_argument('--use-mel-spec',dest='mel_spec_count',action='store_const',const=64,help='Use mel spectrogram with default value (64)')
 
 def get_audio_conf(args):
     audio_conf = {k:args[k] for k in ['sample_rate','window_size','window_stride','window']}
     return audio_conf
 
-def init_new_model(arc,kwargs):
+def init_new_model(arc,channels,kwargs):
     labels = label_sets.labels_map[kwargs['labels']]
     audio_conf = get_audio_conf(kwargs)
-    model = arc(labels=labels,audio_conf=audio_conf,mid_layers=kwargs['layers'])
+    model = arc(labels=labels,audio_conf=audio_conf,mid_layers=kwargs['layers'],input_size=channels)
     return model
 
-def init_model(kwargs):
+def init_model(kwargs,channels):
     arcs_map = {"quartz":MiniJasper,"wav2letter":Wav2Letter}
     arc = arcs_map[kwargs['arc']]
     if kwargs['continue_from']:
         model = arc.load_model(kwargs['continue_from'])
     else:
-        model = init_new_model(arc,kwargs)
+        model = init_new_model(arc,channels,kwargs)
     return model
 
-def init_datasets(audio_conf,labels, kwargs):
-    train_dataset = SpectrogramDataset(kwargs['train_manifest'], audio_conf, labels)
+def init_datasets(kwargs):
+    labels = label_sets.labels_map[kwargs['labels']]
+    audio_conf = get_audio_conf(kwargs)
+    train_dataset = SpectrogramDataset(kwargs['train_manifest'], audio_conf, labels,mel_spec=kwargs['mel_spec_count'],use_cuda=kwargs['cuda'])
     batch_sampler = BatchSampler(SequentialSampler(train_dataset), batch_size=kwargs['batch_size'], drop_last=False)
     train_batch_loader = BatchAudioDataLoader(train_dataset, batch_sampler=batch_sampler)
-    eval_dataset = SpectrogramDataset(kwargs['val_manifest'], audio_conf, labels)
+    eval_dataset = SpectrogramDataset(kwargs['val_manifest'], audio_conf, labels,mel_spec=kwargs['mel_spec_count'],use_cuda=kwargs['cuda'])
     return train_dataset, train_batch_loader, eval_dataset
     
 def get_optimizer(params,kwargs):
@@ -84,8 +88,10 @@ def get_optimizer(params,kwargs):
 
 def train(**kwargs):
     print('starting at %s' % time.asctime())
-    model = init_model(kwargs)
-    train_dataset, train_batch_loader, eval_dataset = init_datasets(model.audio_conf, model.labels, kwargs)
+    #kwargs['cuda'] = kwargs['cuda']# and torch.cuda.is_available()
+    print(kwargs['cuda'])
+    train_dataset, train_batch_loader, eval_dataset = init_datasets(kwargs)
+    model = init_model(kwargs,train_dataset.data_channels())
     print('Model and datasets initialized')
     if kwargs['tensorboard']:
         setup_tensorboard(kwargs['log_dir'])
@@ -111,7 +117,7 @@ def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset
             for idx, data in et.across_epoch('Data Loading time', tqdm.tqdm(enumerate(train_batch_loader),total=batch_count)):
                 inputs, input_lengths, targets, target_lengths, file_paths, texts = data
                 with et.timed_action('Model execution time'):
-                    out = model((torch.FloatTensor(inputs).to(device),torch.IntTensor(input_lengths)))
+                    out = model(torch.FloatTensor(inputs).to(device),input_lengths=torch.IntTensor(input_lengths))
                 out = out.transpose(1,0)
                 output_lengths = [l // scaling_factor for l in input_lengths]
                 with et.timed_action('Loss and BP time'):
@@ -143,7 +149,7 @@ def compute_error_rates(model,dataset,greedy_decoder,kwargs):
         greedy_wer = np.zeros(num_samples)
         for idx, (data) in enumerate(dataset):
             inputs, targets, file_paths, text = data
-            out = model((torch.FloatTensor(inputs,).unsqueeze(0).to(device), torch.IntTensor([inputs.shape[1]])))
+            out = model(torch.FloatTensor(inputs,).unsqueeze(0).to(device), input_lengths=torch.IntTensor([inputs.shape[1]]))
             out = out.transpose(1,0)
             out_sizes = torch.IntTensor([out.size(0)])
             if idx == index_to_print and kwargs['print_samples']:

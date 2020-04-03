@@ -442,11 +442,11 @@ class MiniJasper(nn.Module):
         self.final_layer = nn.Sequential(nn.Conv1d(last_layer_input_size,len(labels),kernel_size=1,stride=1)) #Our labels already include blank
         
         
-    def forward(self,xs):
+    def forward(self,xs,input_lengths):
         '''
-        Tuple: ([Batches X channels X length], lengths)
+        [Batches X channels X length], lengths
         '''
-        jasper_res = self.final_layer(self.jasper_encoder(xs)[0])
+        jasper_res = self.final_layer(self.jasper_encoder((xs,input_lengths))[0])
         jasper_res = jasper_res.transpose(2,1) # For consistency with other models.
         return jasper_res # [Batches X Labels X Time (padded to max)]
     
@@ -460,7 +460,7 @@ class MiniJasper(nn.Module):
     
     @classmethod
     def load_model_package(cls,package):
-        model = cls(labels=package['labels'],audio_conf=package['audio_conf'],mid_layers=package['layers'],input_size=package['input_size'])
+        model = cls(labels=package['labels'],audio_conf=package['audio_conf'],mid_layers=package['layers'],input_size=package.get('input_size'))
         model.load_state_dict(package['state_dict'])
         return model
 

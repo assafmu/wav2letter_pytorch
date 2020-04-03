@@ -87,7 +87,7 @@ class Wav2Letter(nn.Module):
         conv_blocks.append(('conv1d_{}'.format(len(layers)),last_layer))
         self.conv1ds = nn.Sequential(OrderedDict(conv_blocks))
 
-    def forward(self, x):
+    def forward(self, x,input_lengths=None):
         x = self.conv1ds(x)
         x = x.transpose(1,2)
         if self.training:
@@ -109,7 +109,7 @@ class Wav2Letter(nn.Module):
     
     @classmethod
     def load_model_package(cls,package):
-        model = cls(labels=package['labels'],audio_conf=package['audio_conf'],mid_layers=package['layers'],package.get('input_size'))
+        model = cls(labels=package['labels'],audio_conf=package['audio_conf'],mid_layers=package['layers'],input_size=package.get('input_size'))
         model.load_state_dict(package['state_dict'])
         return model
 
@@ -119,7 +119,7 @@ class Wav2Letter(nn.Module):
                 'audio_conf':model.audio_conf,
                 'labels':model.labels,
                 'layers':model.mid_layers,
-                'input_size':model.input_size
+                'input_size':model.input_size,
                 'state_dict':model.state_dict()
                 }
         return package

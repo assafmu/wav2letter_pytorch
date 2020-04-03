@@ -26,13 +26,15 @@ def load_audio(path):
     return sound
 
 class SpectrogramDataset(Dataset):
-    def __init__(self, manifest_filepath, audio_conf, labels):
+    def __init__(self, manifest_filepath, audio_conf, labels,mel_spec=None,use_cuda=False):
         '''
         Create a dataset for ASR. Audio conf and labels can be re-used from the model.
         Arguments:
             manifest_filepath (string): path to the manifest. Can be a csv containing either path-text pairs, or a pandas DataFrame with columns "filepath" and "text"
             audio_conf (dict): dict containing sample rate, and window size stride and type. 
             labels (list): list containing all valid labels in the text.
+            mel_spec(int or None): if not None, use mel spectrogram with that many channels.
+            use_cuda(bool): Use torch and torchaudio for stft. Can speed up extraction on GPU.
         '''
         super(SpectrogramDataset, self).__init__()
         prefix_df = pd.read_csv(manifest_filepath,index_col=0,nrows=2)
@@ -46,9 +48,13 @@ class SpectrogramDataset(Dataset):
         self.sample_rate = audio_conf['sample_rate']
         self.window = audio_conf['window']
         self.window = windows.get(audio_conf['window'], windows['hamming'])
+        self.use_cuda = use_cuda
+        self.mel_spec = mel_spec
         self.labels_map = dict([(labels[i],i) for i in range(len(labels))])
         self.validate_sample_rate()
+        print(mel_spec,use_cuda)
         self.preprocess_spectrograms()
+        
     
     def preprocess_spectrograms(self):
         self.spects = {}
@@ -68,16 +74,37 @@ class SpectrogramDataset(Dataset):
         target = list(filter(None,[self.labels_map.get(x) for x in list(transcript)]))
         return spect, target, audio_path, transcript
     
+    def _get_spect(self,audio,n_fft,hop_length,win_length):
+        if self.use_cuda: # Use torch based convolutions to compute the STFT
+            if self.mel_spec:
+                import torchaudio
+                transform = torchaudio.transforms.MelSpectrogram(sample_rate=self.sample_rate,n_fft=n_fft,n_mels=self.mel_spec)
+                return transform(torch.Tensor(audio))
+            
+            e=torch.stft(torch.FloatTensor(audio),n_fft,hop_length,win_length,window=torch.hamming_window(win_length))
+            magnitudes = (e ** 2).sum(dim=2) ** 0.5 
+            return magnitudes
+        else: # Use CPU bound libraries
+            if self.mel_spec:
+                import python_speech_features
+                spect, energy = python_speech_features.fbank(audio,samplerate=self.sample_rate,winlen=self.window_size,winstep=self.window_stride,winfunc=np.hamming,nfilt=self.mel_spec)
+                return spect.T
+            D = librosa.stft(audio, n_fft=n_fft, hop_length = hop_length, win_length=win_length,window=scipy.signal.hamming)
+            spect, phase = librosa.magphase(D)
+    
+            return spect
+        
+    
     def parse_audio(self,audio_path):
         y = load_audio(audio_path)
         n_fft = int(self.sample_rate * self.window_size)
         win_length = n_fft
         hop_length = int(self.sample_rate * self.window_stride)
-        
+            
         D = librosa.stft(y, n_fft=n_fft, hop_length = hop_length, win_length=win_length,window=self.window)
         
         spect, phase = librosa.magphase(D)
-        
+        spect = self._get_spect(y,n_fft=n_fft,hop_length=hop_length,win_length=win_length)        
         spect = np.log1p(spect)
         mean = spect.mean()
         std = spect.std()
@@ -92,6 +119,12 @@ class SpectrogramDataset(Dataset):
     
     def __len__(self):
         return self.size
+    
+    def data_channels(self):
+        '''
+        How many channels are returned in each example.
+        '''
+        return self.mel_spec or int(1+(int(self.sample_rate * self.window_size)/2))
 
 def _collator(batch):
     inputs, targets, file_paths, texts = zip(*batch)
