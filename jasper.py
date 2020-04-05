@@ -406,9 +406,9 @@ class JasperBlock(nn.Module):
         return out, lens
     
     
-class MiniJasper(nn.Module):
+class Jasper(nn.Module):
     def __init__(self,labels='abc',audio_conf=None,mid_layers=1,input_size=None):
-        super(MiniJasper,self).__init__()
+        super(Jasper,self).__init__()
         self.labels=labels
         self.audio_conf = audio_conf # For consistency with other models
         self.mid_layers = mid_layers

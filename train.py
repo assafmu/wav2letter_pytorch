@@ -14,8 +14,8 @@ import random
 import glob
 
 from data import label_sets
-from model import Wav2Letter
-from jasper import MiniJasper
+from wav2letter import Wav2Letter
+from jasper import Jasper
 from data.data_loader import SpectrogramDataset, BatchAudioDataLoader
 from decoder import GreedyDecoder, PrefixBeamSearchLMDecoder
 import timing
@@ -62,7 +62,7 @@ def init_new_model(arc,channels,kwargs):
     return model
 
 def init_model(kwargs,channels):
-    arcs_map = {"quartz":MiniJasper,"wav2letter":Wav2Letter}
+    arcs_map = {"quartz":Jasper,"wav2letter":Wav2Letter}
     arc = arcs_map[kwargs['arc']]
     if kwargs['continue_from']:
         model = arc.load_model(kwargs['continue_from'])
@@ -88,8 +88,6 @@ def get_optimizer(params,kwargs):
 
 def train(**kwargs):
     print('starting at %s' % time.asctime())
-    #kwargs['cuda'] = kwargs['cuda']# and torch.cuda.is_available()
-    print(kwargs['cuda'])
     train_dataset, train_batch_loader, eval_dataset = init_datasets(kwargs)
     model = init_model(kwargs,train_dataset.data_channels())
     print('Model and datasets initialized')
@@ -121,6 +119,7 @@ def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset
                 out = out.transpose(1,0)
                 output_lengths = [l // scaling_factor for l in input_lengths]
                 with et.timed_action('Loss and BP time'):
+                    print(inputs.shape,out.shape,targets.shape,output_lengths,target_lengths)
                     loss = criterion(out, targets.to(device), torch.IntTensor(output_lengths), torch.IntTensor(target_lengths))
                     optimizer.zero_grad()
                     loss.mean().backward()
@@ -150,14 +149,13 @@ def compute_error_rates(model,dataset,greedy_decoder,kwargs):
         for idx, (data) in enumerate(dataset):
             inputs, targets, file_paths, text = data
             out = model(torch.FloatTensor(inputs,).unsqueeze(0).to(device), input_lengths=torch.IntTensor([inputs.shape[1]]))
-            out = out.transpose(1,0)
-            out_sizes = torch.IntTensor([out.size(0)])
+            out_sizes = torch.IntTensor([out.size(1)])
             if idx == index_to_print and kwargs['print_samples']:
                 print('Validation case')
                 print(text)
-                print(''.join(map(lambda i: model.labels[i], torch.argmax(out.squeeze(), 1))))
+                print(''.join(map(lambda i: model.labels[i], torch.argmax(out.transpose(1,0).squeeze(), 1))))
             
-            greedy_texts = greedy_decoder.decode(probs=out.transpose(1,0), sizes=out_sizes)
+            greedy_texts = greedy_decoder.decode(probs=out, sizes=out_sizes)
             greedy_cer[idx] = greedy_decoder.cer_ratio(text, greedy_texts[0])
             greedy_wer[idx] = greedy_decoder.wer_ratio(text, greedy_texts[0])
     return greedy_cer, greedy_wer

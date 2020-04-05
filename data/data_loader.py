@@ -26,7 +26,7 @@ def load_audio(path):
     return sound
 
 class SpectrogramDataset(Dataset):
-    def __init__(self, manifest_filepath, audio_conf, labels,mel_spec=None,use_cuda=False):
+    def __init__(self, manifest_filepath, audio_conf, labels, mel_spec=None, use_cuda=False):
         '''
         Create a dataset for ASR. Audio conf and labels can be re-used from the model.
         Arguments:
@@ -52,7 +52,6 @@ class SpectrogramDataset(Dataset):
         self.mel_spec = mel_spec
         self.labels_map = dict([(labels[i],i) for i in range(len(labels))])
         self.validate_sample_rate()
-        print(mel_spec,use_cuda)
         self.preprocess_spectrograms()
         
     

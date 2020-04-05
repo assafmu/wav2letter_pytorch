@@ -1,21 +1,21 @@
 # -*- coding: utf-8 -*-
-from jasper import MiniJasper
+from jasper import Jasper
 import torch
 import numpy as np
 
 def test_sanity():
-    model = MiniJasper(input_size=1)
+    model = Jasper(input_size=1)
     
 def test_packaging():
-    model = MiniJasper(input_size=1)
+    model = Jasper(input_size=1)
     package = model.serialize(model)
-    new_model = MiniJasper.load_model_package(package)
+    new_model = Jasper.load_model_package(package)
     assert sum(p.numel() for p in model.parameters()) == sum(p.numel() for p in new_model.parameters())
     
 def test_output_dimensions():
     input_size = 64
     labels = list(range(24))
-    model = MiniJasper(labels,input_size=input_size)    
+    model = Jasper(labels,input_size=input_size)    
     batch_size = 11
     max_length_of_audio = 79
     inp = torch.ones(batch_size,input_size,max_length_of_audio)

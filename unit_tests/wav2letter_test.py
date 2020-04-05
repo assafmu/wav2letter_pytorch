@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-from model import Wav2Letter
+from wav2letter import Wav2Letter
 import torch
 import numpy as np
 
 def test_sanity():
-    model = Wav2Letter(input_size=1)
+    model = Wav2Letter(input_size=1,mid_layers=1)
     
 def test_packaging():
     model = Wav2Letter(input_size=1)
