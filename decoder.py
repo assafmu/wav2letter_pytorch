@@ -149,7 +149,7 @@ def prefix_beam_search(ctc, labels, blank_index=0, lm=None,k=5,alpha=0.3,beta=5,
     """
     assert (ctc.shape[1] == len(labels)), "ctc size:%d, labels: %d" % (ctc.shape[1], len(labels))
     assert ctc.shape[0] > 1, "ctc length: %d was too short" % ctc.shape[0]
-    assert (ctc > 0).all(), 'ctc output contains negative numbers'
+    assert (ctc >= 0).all(), 'ctc output contains negative numbers'
     lm = (lambda l: 1) if lm is None else lm # if no LM is provided, just set to function returning 1
     word_count_re = re.compile(r'\w+[\s|>]')
     W = lambda l: word_count_re.findall(l)

@@ -4,6 +4,7 @@ from typing import List, Optional, Tuple
 import torch
 import torch.nn as nn
 from torch import Tensor
+import torch.nn.functional as F
 
 jasper_activations = {
     "hardtanh": nn.Hardtanh,
@@ -440,7 +441,8 @@ class MiniJasper(nn.Module):
         #Last layer, created by JasperDecoder
         last_layer_input_size = self.jasper_encoder[-1].mconv[-1].num_features
         self.final_layer = nn.Sequential(nn.Conv1d(last_layer_input_size,len(labels),kernel_size=1,stride=1)) #Our labels already include blank
-        
+        self.jasper_encoder.apply(init_weights)
+        self.final_layer.apply(init_weights)
         
     def forward(self,xs,input_lengths):
         '''
@@ -448,6 +450,10 @@ class MiniJasper(nn.Module):
         '''
         jasper_res = self.final_layer(self.jasper_encoder((xs,input_lengths))[0])
         jasper_res = jasper_res.transpose(2,1) # For consistency with other models.
+        if self.training:
+            jasper_res = F.log_softmax(jasper_res,dim=-1)
+        else:
+            jasper_res = F.softmax(jasper_res,dim=-1)
         return jasper_res # [Batches X Labels X Time (padded to max)]
     
     def get_scaling_factor(self):
@@ -476,18 +482,3 @@ class MiniJasper(nn.Module):
         return package
 
     
-if __name__=='__main__':
-    input_size = 64
-    labels = list(range(24))
-    mini_jasper = MiniJasper(labels,input_size=input_size)
-    
-    batch_size = 11 #Free
-    max_length_of_audio = 79 #computed from data loader
-    first_channels = input_size
-    num_labels = len(labels)
-    inp = [torch.ones(batch_size,first_channels,max_length_of_audio),torch.randint(max_length_of_audio,(batch_size,))]
-
-    import math
-    max_output_length = math.ceil(max_length_of_audio/mini_jasper.get_scaling_factor())
-    jasper_res = mini_jasper(inp)
-    assert jasper_res.shape ==  torch.Size((batch_size,max_output_length,num_labels))
