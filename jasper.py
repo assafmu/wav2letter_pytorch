@@ -6,6 +6,8 @@ import torch.nn as nn
 from torch import Tensor
 import torch.nn.functional as F
 
+import numpy as np
+
 jasper_activations = {
     "hardtanh": nn.Hardtanh,
     "relu": nn.ReLU,
@@ -369,7 +371,6 @@ class JasperBlock(nn.Module):
         xs = input_[0]
         if len(input_) == 2:
             xs, lens_orig = input_
-
         # compute forward convolutions
         out = xs#[-1]
 
@@ -416,6 +417,7 @@ class Jasper(nn.Module):
             nfft = (self.audio_conf['sample_rate'] * self.audio_conf['window_size'])
             input_size = int(1+(nfft/2))
         self.input_size = input_size
+        self.ad_hoc_batch_norm = nn.BatchNorm1d(input_size,track_running_stats=False,affine=False)
         #Jasper blocks created by "JasperEncoder"
         #Bad code, but replicates QuartzNet layout. Need to refactor, a lot.
         blocks = [
@@ -448,12 +450,17 @@ class Jasper(nn.Module):
         '''
         [Batches X channels X length], lengths
         '''
-        jasper_res = self.final_layer(self.jasper_encoder((xs,input_lengths))[0])
+        xs = self.ad_hoc_batch_norm(xs)
+        if np.isinf(xs.cpu()).any() or np.isnan(xs.cpu()).any():
+            print('inf or nan after batch norm')
+        xs = self.jasper_encoder((xs,input_lengths))[0]
+        jasper_res = self.final_layer(xs)
         jasper_res = jasper_res.transpose(2,1) # For consistency with other models.
         if self.training:
             jasper_res = F.log_softmax(jasper_res,dim=-1)
         else:
             jasper_res = F.softmax(jasper_res,dim=-1)
+        assert not (jasper_res != jasper_res).any()  # is there any NAN in result?
         return jasper_res # [Batches X Labels X Time (padded to max)]
     
     def get_scaling_factor(self):

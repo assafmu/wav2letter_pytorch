@@ -77,7 +77,7 @@ class SpectrogramDataset(Dataset):
         if self.use_cuda: # Use torch based convolutions to compute the STFT
             if self.mel_spec:
                 import torchaudio
-                transform = torchaudio.transforms.MelSpectrogram(sample_rate=self.sample_rate,n_fft=n_fft,n_mels=self.mel_spec)
+                transform = torchaudio.transforms.MelSpectrogram(sample_rate=self.sample_rate,n_fft=512,n_mels=self.mel_spec)
                 return transform(torch.Tensor(audio))
             
             e=torch.stft(torch.FloatTensor(audio),n_fft,hop_length,win_length,window=torch.hamming_window(win_length))
@@ -86,7 +86,7 @@ class SpectrogramDataset(Dataset):
         else: # Use CPU bound libraries
             if self.mel_spec:
                 import python_speech_features
-                spect, energy = python_speech_features.fbank(audio,samplerate=self.sample_rate,winlen=self.window_size,winstep=self.window_stride,winfunc=np.hamming,nfilt=self.mel_spec)
+                spect, energy = python_speech_features.fbank(audio,samplerate=self.sample_rate,winlen=self.window_size,winstep=self.window_stride,winfunc=np.hamming,nfilt=self.mel_spec,nfft=512)
                 return spect.T
             D = librosa.stft(audio, n_fft=n_fft, hop_length = hop_length, win_length=win_length,window=scipy.signal.hamming)
             spect, phase = librosa.magphase(D)
@@ -105,10 +105,14 @@ class SpectrogramDataset(Dataset):
         spect, phase = librosa.magphase(D)
         spect = self._get_spect(y,n_fft=n_fft,hop_length=hop_length,win_length=win_length)        
         spect = np.log1p(spect)
+        if np.isinf(spect).any() or np.isnan(spect).any():
+            print('%s spect has INF or NAN before any normalization' % audio_path)
         mean = spect.mean()
         std = spect.std()
         spect = np.add(spect,-mean)
         spect = spect / std
+        if np.isinf(spect).any() or np.isnan(spect).any():
+            print('%s spect has INF or NAN after spect normalization' % audio_path)
         return spect
     
     def validate_sample_rate(self):
