@@ -77,24 +77,24 @@ class SpectrogramDataset(Dataset):
         if self.use_cuda: # Use torch based convolutions to compute the STFT
             if self.mel_spec:
                 import torchaudio
-                transform = torchaudio.transforms.MelSpectrogram(sample_rate=self.sample_rate,n_fft=512,n_mels=self.mel_spec)
+                transform = torchaudio.transforms.MelSpectrogram(sample_rate=self.sample_rate,n_fft=n_fft,n_mels=self.mel_spec)
                 return transform(torch.Tensor(audio))
             
             e=torch.stft(torch.FloatTensor(audio),n_fft,hop_length,win_length,window=torch.hamming_window(win_length))
-            magnitudes = (e ** 2).sum(dim=2) ** 0.5 
+            magnitudes = abs(e.sum(dim=2))
             return magnitudes
         else: # Use CPU bound libraries
             if self.mel_spec:
                 import python_speech_features
-                spect, energy = python_speech_features.fbank(audio,samplerate=self.sample_rate,winlen=self.window_size,winstep=self.window_stride,winfunc=np.hamming,nfilt=self.mel_spec,nfft=512)
+                spect, energy = python_speech_features.fbank(audio,samplerate=self.sample_rate,winlen=self.window_size,winstep=self.window_stride,winfunc=np.hamming,nfilt=self.mel_spec,nfft=n_fft)
                 return spect.T
             D = librosa.stft(audio, n_fft=n_fft, hop_length = hop_length, win_length=win_length,window=scipy.signal.hamming)
             spect, phase = librosa.magphase(D)
-    
             return spect
-        
-    
+
     def parse_audio(self,audio_path):
+        epsilon = 1e-5
+        log_zero_guard_value=2 ** -24
         y = load_audio(audio_path)
         n_fft = int(self.sample_rate * self.window_size)
         win_length = n_fft
@@ -102,17 +102,16 @@ class SpectrogramDataset(Dataset):
             
         D = librosa.stft(y, n_fft=n_fft, hop_length = hop_length, win_length=win_length,window=self.window)
         
-        spect, phase = librosa.magphase(D)
+        # spect, phase = librosa.magphase(D)
         spect = self._get_spect(y,n_fft=n_fft,hop_length=hop_length,win_length=win_length)        
-        spect = np.log1p(spect)
-        if np.isinf(spect).any() or np.isnan(spect).any():
-            print('%s spect has INF or NAN before any normalization' % audio_path)
-        mean = spect.mean()
-        std = spect.std()
-        spect = np.add(spect,-mean)
-        spect = spect / std
-        if np.isinf(spect).any() or np.isnan(spect).any():
-            print('%s spect has INF or NAN after spect normalization' % audio_path)
+        spect = np.log1p(spect + log_zero_guard_value)
+        # spect = torch.log(spect + log_zero_guard_value)
+        #normlize across time
+        mean = spect.mean(axis=1)
+        std = spect.std(axis=1)
+        std += epsilon
+        spect = spect - mean.reshape(-1, 1)
+        spect = spect / std.reshape(-1, 1)
         return spect
     
     def validate_sample_rate(self):
@@ -135,7 +134,7 @@ def _collator(batch):
     target_lengths = list(map(len,targets))
     longest_input = max(input_lengths)
     longest_target = max(target_lengths)
-    pad_function = lambda x:np.pad(x,((0,0),(0,longest_input-x.shape[1])),mode='wrap')
+    pad_function = lambda x:np.pad(x,((0,0),(0,longest_input-x.shape[1])),mode='constant')
     inputs = torch.FloatTensor(list(map(pad_function,inputs)))
     targets = torch.IntTensor([np.pad(np.array(t),(0,longest_target-len(t)),mode='constant') for t in targets])
     return inputs, input_lengths, targets, target_lengths, file_paths, texts

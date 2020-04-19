@@ -29,11 +29,15 @@ class Conv1dBlock(nn.Module):
         '''Padding Calculation'''
         input_rows = input_channels
         filter_rows = kernel_size[0]
-        effective_filter_size_rows = (filter_rows - 1) * dilation + 1
         out_rows = (input_rows + stride - 1) // stride
-        self.padding_needed = max(0,(out_rows -1) * stride + effective_filter_size_rows - input_rows)
         self.padding_rows = max(0, (out_rows -1) * stride + (filter_rows -1) * dilation + 1 - input_rows)
-        self.paddingAdded = nn.ReflectionPad1d(self.padding_rows //2) if self.padding_rows > 0 else identity()
+        if self.padding_rows > 0:
+            if self.padding_rows % 2 == 0:
+                self.paddingAdded = nn.ReflectionPad1d(self.padding_rows // 2)
+            else:
+                self.paddingAdded = nn.ReflectionPad1d((self.padding_rows //2,(self.padding_rows +1)//2))
+        else:
+            self.paddingAdded =  identity()
         self.conv1 = nn.Conv1d(in_channels=input_channels,out_channels=output_channels,
                           kernel_size=kernel_size,stride=stride,padding=0,dilation=dilation)
         self.batch_norm = nn.BatchNorm1d(num_features=output_channels,momentum=0.9,eps=0.001) if bn else identity()

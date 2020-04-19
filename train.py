@@ -23,8 +23,8 @@ from torch.utils.data import BatchSampler, SequentialSampler
 from novograd import Novograd
 
 parser = argparse.ArgumentParser(description='Wav2Letter training')
-parser.add_argument('--train-manifest',help='path to train manifest csv', default='data/train.csv')
-parser.add_argument('--val-manifest',help='path to validation manifest csv',default='data/validation.csv')
+parser.add_argument('--train-manifest',help='path to train manifest csv', default='/datadrive/librispeech/small_df.csv')
+parser.add_argument('--val-manifest',help='path to validation manifest csv',default='/datadrive/librispeech/small_df.csv')
 parser.add_argument('--sample-rate',default=8000,type=int,help='Sample rate')
 parser.add_argument('--window-size',default=.02,type=float,help='Window size for spectrogram in seconds')
 parser.add_argument('--window-stride',default=.01,type=float,help='Window sstride for spectrogram in seconds')
@@ -33,12 +33,12 @@ parser.add_argument('--epochs',default=10,type=int,help='Number of training epoc
 parser.add_argument('--lr',default=1e-5,type=float,help='Initial learning rate')
 parser.add_argument('--batch-size',default=8,type=int,help='Batch size to use during training')
 parser.add_argument('--momentum',default=0.9,type=float,help='Momentum')
-parser.add_argument('--tensorboard',default=True, dest='tensorboard', action='store_true',help='Turn on tensorboard graphing')
+parser.add_argument('--tensorboard',default=False, dest='tensorboard', action='store_true',help='Turn on tensorboard graphing')
 parser.add_argument('--no-tensorboard',dest='tensorboard',action='store_false',help='Turn off tensorboard graphing')
 parser.add_argument('--log-dir',default='visualize/wav2letter',type=str,help='Directory for tensorboard logs')
 parser.add_argument('--seed',type=int,default=1234)
 parser.add_argument('--id',default='Wav2letter training',help='Tensorboard id')
-parser.add_argument('--model-dir',default='models/wav2letter',help='Directory to save models. Set as empty, or use --no-model-save to disable saving.')
+parser.add_argument('--model-dir',default='',help='Directory to save models. Set as empty, or use --no-model-save to disable saving.')
 parser.add_argument('--no-model-save',dest='model_dir',action='store_const',const='')
 parser.add_argument('--layers',default=1,type=int,help='Number of Conv1D blocks, between 1 and 16. 2 Additional last layers are always added.')
 parser.add_argument('--labels',default='english',type=str,help='Name of label set to use')
@@ -114,9 +114,12 @@ def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset
             total_loss = 0
             for idx, data in et.across_epoch('Data Loading time', tqdm.tqdm(enumerate(train_batch_loader),total=batch_count)):
                 inputs, input_lengths, targets, target_lengths, file_paths, texts = data
-                print(file_paths)
                 with et.timed_action('Model execution time'):
-                    out = model(torch.FloatTensor(inputs).to(device),input_lengths=torch.IntTensor(input_lengths))
+                    model_output = model(torch.FloatTensor(inputs).to(device),input_lengths=torch.IntTensor(input_lengths))
+                if type(model) == Jasper:
+                    out = model_output[0]
+                else:
+                    out = model_output
                 out = out.transpose(1,0)
                 output_lengths = [l // scaling_factor for l in input_lengths]
                 with et.timed_action('Loss and BP time'):
@@ -148,7 +151,11 @@ def compute_error_rates(model,dataset,greedy_decoder,kwargs):
         greedy_wer = np.zeros(num_samples)
         for idx, (data) in enumerate(dataset):
             inputs, targets, file_paths, text = data
-            out = model(torch.FloatTensor(inputs,).unsqueeze(0).to(device), input_lengths=torch.IntTensor([inputs.shape[1]]))
+            model_output = model(torch.FloatTensor(inputs,).unsqueeze(0).to(device), input_lengths=torch.IntTensor([inputs.shape[1]]))
+            if type(model) == Jasper:
+                out = model_output[0]
+            else:
+                out = model_output
             out_sizes = torch.IntTensor([out.size(1)])
             if idx == index_to_print and kwargs['print_samples']:
                 print('Validation case')

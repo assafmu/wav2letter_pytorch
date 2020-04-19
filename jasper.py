@@ -5,9 +5,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 import torch.nn.functional as F
-
-import numpy as np
-
+import pickle
 jasper_activations = {
     "hardtanh": nn.Hardtanh,
     "relu": nn.ReLU,
@@ -153,7 +151,7 @@ class JasperBlock(nn.Module):
         stride=1,
         dilation=1,
         padding='same',
-        dropout=0.2,
+        dropout=0,
         activation=None,
         residual=True,
         groups=1,
@@ -371,6 +369,7 @@ class JasperBlock(nn.Module):
         xs = input_[0]
         if len(input_) == 2:
             xs, lens_orig = input_
+
         # compute forward convolutions
         out = xs#[-1]
 
@@ -417,25 +416,25 @@ class Jasper(nn.Module):
             nfft = (self.audio_conf['sample_rate'] * self.audio_conf['window_size'])
             input_size = int(1+(nfft/2))
         self.input_size = input_size
-        self.ad_hoc_batch_norm = nn.BatchNorm1d(input_size,track_running_stats=False,affine=False)
+        # self.input_batch_norm = nn.BatchNorm1d(out_channels, eps=1e-3, momentum=0.1)
         #Jasper blocks created by "JasperEncoder"
         #Bad code, but replicates QuartzNet layout. Need to refactor, a lot.
         blocks = [
-                JasperBlock(input_size,256,kernel_size=32,stride=2,dilation=1,residual=False,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.2),
-                JasperBlock(256,256,kernel_size=32,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.2),
-                JasperBlock(256,256,kernel_size=32,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.2),
-                JasperBlock(256,256,kernel_size=32,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.2),
-                JasperBlock(256,256,kernel_size=38,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.2),
-                JasperBlock(256,256,kernel_size=38,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.2),
-                JasperBlock(256,256,kernel_size=38,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.2),
-                JasperBlock(256,512,kernel_size=50,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.3),
-                JasperBlock(512,512,kernel_size=50,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.3),
-                JasperBlock(512,512,kernel_size=50,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.3),
-                JasperBlock(512,512,kernel_size=62,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.3),
-                JasperBlock(512,512,kernel_size=62,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.3),
-                JasperBlock(512,512,kernel_size=62,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.4),
-                JasperBlock(512,512,kernel_size=74,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0.4),
-                JasperBlock(512,1024,kernel_size=1,stride=1,dilation=1,residual=False,repeat=1,conv_mask=True,activation=torch.nn.ReLU(),dropout=0.4)
+                JasperBlock(64,256,kernel_size=32,stride=2,dilation=1,residual=False,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
+                JasperBlock(256,256,kernel_size=32,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
+                JasperBlock(256,256,kernel_size=32,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
+                JasperBlock(256,256,kernel_size=32,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
+                JasperBlock(256,256,kernel_size=38,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
+                JasperBlock(256,256,kernel_size=38,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
+                JasperBlock(256,256,kernel_size=38,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
+                JasperBlock(256,512,kernel_size=50,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
+                JasperBlock(512,512,kernel_size=50,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
+                JasperBlock(512,512,kernel_size=50,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
+                JasperBlock(512,512,kernel_size=62,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
+                JasperBlock(512,512,kernel_size=62,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
+                JasperBlock(512,512,kernel_size=62,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
+                JasperBlock(512,512,kernel_size=74,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
+                JasperBlock(512,1024,kernel_size=1,stride=1,dilation=1,residual=False,repeat=1,conv_mask=True,activation=torch.nn.ReLU(),dropout=0)
                 
                 ]
         #self.almost_all_jasper = nn.Sequential(*[zero_block,blocks_123,blocks_456,blocks_7,blocks_89,blocks_101112,blocks_13,blocks_14][:mid_layers])
@@ -450,18 +449,16 @@ class Jasper(nn.Module):
         '''
         [Batches X channels X length], lengths
         '''
-        xs = self.ad_hoc_batch_norm(xs)
-        if np.isinf(xs.cpu()).any() or np.isnan(xs.cpu()).any():
-            print('inf or nan after batch norm')
-        xs = self.jasper_encoder((xs,input_lengths))[0]
-        jasper_res = self.final_layer(xs)
+        encoder_res = self.jasper_encoder((xs,torch.IntTensor(input_lengths)))
+        outout_lengths = encoder_res[1]
+        jasper_res = self.final_layer(encoder_res[0])
         jasper_res = jasper_res.transpose(2,1) # For consistency with other models.
         if self.training:
             jasper_res = F.log_softmax(jasper_res,dim=-1)
         else:
             jasper_res = F.softmax(jasper_res,dim=-1)
         assert not (jasper_res != jasper_res).any()  # is there any NAN in result?
-        return jasper_res # [Batches X Labels X Time (padded to max)]
+        return jasper_res,outout_lengths # [Batches X Labels X Time (padded to max)], [Batches]
     
     def get_scaling_factor(self):
         return 2 # this is incorrect, but will work... for now.
