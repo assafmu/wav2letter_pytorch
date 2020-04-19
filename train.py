@@ -31,6 +31,8 @@ parser.add_argument('--window-stride',default=.01,type=float,help='Window sstrid
 parser.add_argument('--window',default='hamming',help='Window type for spectrogram generation')
 parser.add_argument('--epochs',default=10,type=int,help='Number of training epochs')
 parser.add_argument('--lr',default=1e-5,type=float,help='Initial learning rate')
+parser.add_argument('--warmup',default=0.2,type=int,help='Percent of steps to warmup learning rate, before cosine annealing. Only used with --lr-sched onecycle')
+parser.add_argument('--lr-sched',default='const',type=str,help='Which learning rate scheduler to use. Can be either const, cosine, or onecycle')
 parser.add_argument('--batch-size',default=8,type=int,help='Batch size to use during training')
 parser.add_argument('--momentum',default=0.9,type=float,help='Momentum')
 parser.add_argument('--tensorboard',default=False, dest='tensorboard', action='store_true',help='Turn on tensorboard graphing')
@@ -86,6 +88,18 @@ def get_optimizer(params,kwargs):
         return Novograd(params,lr=kwargs['lr'])
     return None
 
+def get_scheduler(opt,kwargs,batch_count,epochs):
+    total_steps = batch_count * epochs
+    if kwargs['lr_sched'] == 'cosine':
+        sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, total_steps*(1-kwargs['warmup']), eta_min=0)
+        return sched
+    if kwargs['lr_sched'] == 'onecycle':
+        sched = torch.optim.lr_scheduler.OneCycleLR(opt,10*kwargs['lr'],total_steps=total_steps,pct_start=kwargs['warmup']) # 10 should be configurable.
+        return sched
+    if kwargs['lr_sched'] != 'const':
+        print('Learning rate scheduler %s not found, defaulting to const' % kwargs['lr_sched'])
+    return torch.optim.lr_scheduler.LambdaLR(opt, lambda l: 1.0)  # constant
+
 def train(**kwargs):
     print('starting at %s' % time.asctime())
     train_dataset, train_batch_loader, eval_dataset = init_datasets(kwargs)
@@ -104,10 +118,10 @@ def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset
     criterion = nn.CTCLoss(blank=0,reduction='none')
     parameters = model.parameters()
     optimizer = get_optimizer(parameters,kwargs)
-    scaling_factor = model.get_scaling_factor()
     epochs=kwargs['epochs']
     print('Train dataset size:%d' % len(train_dataset))
     batch_count = math.ceil(len(train_dataset) / kwargs['batch_size'])
+    lr_scheduler = get_scheduler(optimizer,kwargs,batch_count,epochs)
     for epoch in range(epochs):
         with timing.EpochTimer(epoch,_log_to_tensorboard) as et:
             model.train()
@@ -115,13 +129,18 @@ def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset
             for idx, data in et.across_epoch('Data Loading time', tqdm.tqdm(enumerate(train_batch_loader),total=batch_count)):
                 inputs, input_lengths, targets, target_lengths, file_paths, texts = data
                 with et.timed_action('Model execution time'):
-                    model_output, output_lengths = model(torch.FloatTensor(inputs).to(device),input_lengths=torch.IntTensor(input_lengths))
-                out = out.transpose(1,0)
+                    out, output_lengths = model(torch.FloatTensor(inputs).to(device), input_lengths=torch.IntTensor(input_lengths))
+                out = out.transpose(1, 0)
                 with et.timed_action('Loss and BP time'):
                     loss = criterion(out, targets.to(device), torch.IntTensor(output_lengths), torch.IntTensor(target_lengths))
                     optimizer.zero_grad()
                     loss.mean().backward()
                     optimizer.step()
+                    if kwargs['lr_sched'] == 'cosine':
+                        lr_scheduler.step((epoch * batch_count + idx) - kwargs['warmup'] * epochs * batch_count)
+                    else:
+                        lr_scheduler.step(epoch*batch_count + idx)
+                    # print(optimizer.state_dict()['param_groups'][0]['lr'])
                 total_loss += loss.mean().item()
             log_loss_to_tensorboard(epoch, total_loss / batch_count)
             evaluate(model,eval_dataset,greedy_decoder,epoch,kwargs)

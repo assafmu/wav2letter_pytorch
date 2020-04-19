@@ -421,7 +421,7 @@ class Jasper(nn.Module):
         #Jasper blocks created by "JasperEncoder"
         #Bad code, but replicates QuartzNet layout. Need to refactor, a lot.
         blocks = [
-                JasperBlock(64,256,kernel_size=32,stride=2,dilation=1,residual=False,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
+                JasperBlock(input_size,256,kernel_size=32,stride=2,dilation=1,residual=False,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
                 JasperBlock(256,256,kernel_size=32,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
                 JasperBlock(256,256,kernel_size=32,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
                 JasperBlock(256,256,kernel_size=32,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),

@@ -61,6 +61,8 @@ class SpectrogramDataset(Dataset):
             audio_path = self.df.filepath.iloc[i]
             spect = self.parse_audio(audio_path)
             self.spects[i] = spect
+            if self.size > 100 and i % (self.size // 20) == 0:
+                print("Processed %d out of %d spects" %( i, self.size))
         
     def __getitem__(self, index):
         sample = self.df.iloc[index]
