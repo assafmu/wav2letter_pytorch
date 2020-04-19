@@ -131,6 +131,7 @@ def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset
                 with et.timed_action('Model execution time'):
                     out, output_lengths = model(torch.FloatTensor(inputs).to(device), input_lengths=torch.IntTensor(input_lengths))
                 out = out.transpose(1, 0)
+                output_lengths = [l // model.scaling_factor for l in input_lengths] # TODO: check types of output_lengths. This computation works, receiving it from model doesn't.
                 with et.timed_action('Loss and BP time'):
                     loss = criterion(out, targets.to(device), torch.IntTensor(output_lengths), torch.IntTensor(target_lengths))
                     optimizer.zero_grad()

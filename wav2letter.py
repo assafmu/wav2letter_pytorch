@@ -93,7 +93,7 @@ class Wav2Letter(nn.Module):
         strides = []
         for module in self.conv1ds.children():
             strides.append(module.conv1.stride[0])
-        self.scaling_factor = np.prod(strides)
+        self.scaling_factor = int(np.prod(strides))
 
     def forward(self, x, input_lengths=None):
         x = self.conv1ds(x)
@@ -102,7 +102,7 @@ class Wav2Letter(nn.Module):
             x = F.log_softmax(x,dim=-1)
         else:
             x = F.softmax(x,dim=-1)
-        if input_lengths:
+        if input_lengths is not None:
             output_lengths = [l // self.scaling_factor for l in input_lengths]
         else:
             output_lengths = None

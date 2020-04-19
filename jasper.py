@@ -446,7 +446,7 @@ class Jasper(nn.Module):
         self.jasper_encoder.apply(init_weights)
         self.final_layer.apply(init_weights)
 
-        self.scaling_factor = np.prod([block.mconv[0].conv.stride[0] for block in blocks[:mid_layers]])
+        self.scaling_factor = int(np.prod([block.mconv[0].conv.stride[0] for block in blocks[:mid_layers]]))
         
     def forward(self,xs,input_lengths):
         '''
@@ -461,7 +461,7 @@ class Jasper(nn.Module):
         else:
             jasper_res = F.softmax(jasper_res,dim=-1)
         assert not (jasper_res != jasper_res).any()  # is there any NAN in result?
-        return jasper_res,outout_lengths # [Batches X Labels X Time (padded to max)], [Batches]
+        return jasper_res, outout_lengths # [Batches X Labels X Time (padded to max)], [Batches]
 
     @classmethod
     def load_model(cls,path):
