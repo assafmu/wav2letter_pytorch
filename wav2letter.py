@@ -90,21 +90,23 @@ class Wav2Letter(nn.Module):
         last_layer = Conv1dBlock(input_channels=layer_size, output_channels=len(self.labels), kernel_size=(1,), stride=1,bn=False,activation_use=False)
         conv_blocks.append(('conv1d_{}'.format(len(layers)),last_layer))
         self.conv1ds = nn.Sequential(OrderedDict(conv_blocks))
+        strides = []
+        for module in self.conv1ds.children():
+            strides.append(module.conv1.stride[0])
+        self.scaling_factor = np.prod(strides)
 
-    def forward(self, x,input_lengths=None):
+    def forward(self, x, input_lengths=None):
         x = self.conv1ds(x)
         x = x.transpose(1,2)
         if self.training:
             x = F.log_softmax(x,dim=-1)
         else:
             x = F.softmax(x,dim=-1)
-        return x
-    
-    def get_scaling_factor(self):
-        strides = []
-        for module in self.conv1ds.children():
-            strides.append(module.conv1.stride[0])
-        return np.prod(strides)
+        if input_lengths:
+            output_lengths = [l // self.scaling_factor for l in input_lengths]
+        else:
+            output_lengths = None
+        return x, output_lengths
     
     @classmethod
     def load_model(cls,path):

@@ -115,13 +115,8 @@ def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset
             for idx, data in et.across_epoch('Data Loading time', tqdm.tqdm(enumerate(train_batch_loader),total=batch_count)):
                 inputs, input_lengths, targets, target_lengths, file_paths, texts = data
                 with et.timed_action('Model execution time'):
-                    model_output = model(torch.FloatTensor(inputs).to(device),input_lengths=torch.IntTensor(input_lengths))
-                if type(model) == Jasper:
-                    out = model_output[0]
-                else:
-                    out = model_output
+                    model_output, output_lengths = model(torch.FloatTensor(inputs).to(device),input_lengths=torch.IntTensor(input_lengths))
                 out = out.transpose(1,0)
-                output_lengths = [l // scaling_factor for l in input_lengths]
                 with et.timed_action('Loss and BP time'):
                     loss = criterion(out, targets.to(device), torch.IntTensor(output_lengths), torch.IntTensor(target_lengths))
                     optimizer.zero_grad()
@@ -130,7 +125,7 @@ def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset
                 total_loss += loss.mean().item()
             log_loss_to_tensorboard(epoch, total_loss / batch_count)
             evaluate(model,eval_dataset,greedy_decoder,epoch,kwargs)
-            if epoch != 0 and epoch % kwargs['epochs_per_save'] == 0 :
+            if epoch != 0 and epoch % kwargs['epochs_per_save'] == 0:
                 save_epoch_model(model,epoch, kwargs['model_dir'])
     if kwargs['model_dir']:
         save_model(model, kwargs['model_dir']+'/final.pth')
@@ -151,11 +146,7 @@ def compute_error_rates(model,dataset,greedy_decoder,kwargs):
         greedy_wer = np.zeros(num_samples)
         for idx, (data) in enumerate(dataset):
             inputs, targets, file_paths, text = data
-            model_output = model(torch.FloatTensor(inputs,).unsqueeze(0).to(device), input_lengths=torch.IntTensor([inputs.shape[1]]))
-            if type(model) == Jasper:
-                out = model_output[0]
-            else:
-                out = model_output
+            out, _ = model(torch.FloatTensor(inputs,).unsqueeze(0).to(device), input_lengths=torch.IntTensor([inputs.shape[1]]))
             out_sizes = torch.IntTensor([out.size(1)])
             if idx == index_to_print and kwargs['print_samples']:
                 print('Validation case')

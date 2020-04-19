@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 import torch.nn.functional as F
+import numpy as np
 import pickle
 jasper_activations = {
     "hardtanh": nn.Hardtanh,
@@ -444,6 +445,8 @@ class Jasper(nn.Module):
         self.final_layer = nn.Sequential(nn.Conv1d(last_layer_input_size,len(labels),kernel_size=1,stride=1)) #Our labels already include blank
         self.jasper_encoder.apply(init_weights)
         self.final_layer.apply(init_weights)
+
+        self.scaling_factor = np.prod([block.mconv[0].conv.stride[0] for block in blocks[:mid_layers]])
         
     def forward(self,xs,input_lengths):
         '''
@@ -459,10 +462,7 @@ class Jasper(nn.Module):
             jasper_res = F.softmax(jasper_res,dim=-1)
         assert not (jasper_res != jasper_res).any()  # is there any NAN in result?
         return jasper_res,outout_lengths # [Batches X Labels X Time (padded to max)], [Batches]
-    
-    def get_scaling_factor(self):
-        return 2 # this is incorrect, but will work... for now.
-    
+
     @classmethod
     def load_model(cls,path):
         package = torch.load(path,map_location = lambda storage, loc: storage)
