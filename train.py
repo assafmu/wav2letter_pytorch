@@ -13,7 +13,7 @@ import datetime
 import random
 import glob
 
-from data import label_sets
+from data import label_sets, augmentations
 from wav2letter import Wav2Letter
 from jasper import Jasper
 from data.data_loader import SpectrogramDataset, BatchAudioDataLoader
@@ -35,7 +35,7 @@ parser.add_argument('--warmup',default=0.2,type=int,help='Percent of steps to wa
 parser.add_argument('--lr-sched',default='const',type=str,help='Which learning rate scheduler to use. Can be either const, cosine, or onecycle')
 parser.add_argument('--batch-size',default=8,type=int,help='Batch size to use during training')
 parser.add_argument('--momentum',default=0.9,type=float,help='Momentum')
-parser.add_argument('--tensorboard',default=False, dest='tensorboard', action='store_true',help='Turn on tensorboard graphing')
+parser.add_argument('--tensorboard',default=True, dest='tensorboard', action='store_true',help='Turn on tensorboard graphing')
 parser.add_argument('--no-tensorboard',dest='tensorboard',action='store_false',help='Turn off tensorboard graphing')
 parser.add_argument('--log-dir',default='visualize/wav2letter',type=str,help='Directory for tensorboard logs')
 parser.add_argument('--seed',type=int,default=1234)
@@ -52,6 +52,9 @@ parser.add_argument('--arc',default='quartz',type=str,help='Network architecture
 parser.add_argument('--optimizer',default='sgd',type=str,help='Optimizer to use. can be either "sgd" (default) or "novograd". Note that novograd only accepts --lr parameter.')
 parser.add_argument('--mel-spec-count',default=0,type=int,help='How many channels to use in Mel Spectrogram')
 parser.add_argument('--use-mel-spec',dest='mel_spec_count',action='store_const',const=64,help='Use mel spectrogram with default value (64)')
+parser.add_argument('--augment',default='none',help='Choose augmentation to use. Can be either none (default), specaugment (SpecAugment) or speccutout (SpecCutout)')
+
+
 
 def get_audio_conf(args):
     audio_conf = {k:args[k] for k in ['sample_rate','window_size','window_stride','window']}
@@ -100,6 +103,15 @@ def get_scheduler(opt,kwargs,batch_count,epochs):
         print('Learning rate scheduler %s not found, defaulting to const' % kwargs['lr_sched'])
     return torch.optim.lr_scheduler.LambdaLR(opt, lambda l: 1.0)  # constant
 
+def get_augmentor(kwargs):
+    if kwargs['augment'] == 'specaugment':
+        return augmentations.SpecAugment()
+    if kwargs['augment'] == 'speccutout':
+        return augmentations.SpecCutout()
+    if kwargs['augment'] != 'none':
+        print('Data augmentation %s not found, defaulting to none' % kwargs['augment'])
+    return augmentations.Identity()
+
 def train(**kwargs):
     print('starting at %s' % time.asctime())
     train_dataset, train_batch_loader, eval_dataset = init_datasets(kwargs)
@@ -107,6 +119,7 @@ def train(**kwargs):
     print('Model and datasets initialized')
     if kwargs['tensorboard']:
         setup_tensorboard(kwargs['log_dir'])
+        # TODO: Dump kwargs to log_dir for later documentation
     training_loop(model,kwargs, train_dataset, train_batch_loader, eval_dataset)   
     if kwargs['tensorboard']:
         _tensorboard_writer.close()
@@ -118,6 +131,7 @@ def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset
     criterion = nn.CTCLoss(blank=0,reduction='none')
     parameters = model.parameters()
     optimizer = get_optimizer(parameters,kwargs)
+    data_augmentation = get_augmentor(kwargs)
     epochs=kwargs['epochs']
     print('Train dataset size:%d' % len(train_dataset))
     batch_count = math.ceil(len(train_dataset) / kwargs['batch_size'])
@@ -128,11 +142,13 @@ def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset
             total_loss = 0
             for idx, data in et.across_epoch('Data Loading time', tqdm.tqdm(enumerate(train_batch_loader),total=batch_count)):
                 inputs, input_lengths, targets, target_lengths, file_paths, texts = data
+                with et.timed_action("Data augmetation time"):
+                    inputs = data_augmentation(inputs)
                 with et.timed_action('Model execution time'):
                     out, output_lengths = model(torch.FloatTensor(inputs).to(device), input_lengths=torch.IntTensor(input_lengths))
                 out = out.transpose(1, 0)
                 output_lengths = [l // model.scaling_factor for l in input_lengths] # TODO: check types of output_lengths. This computation works, receiving it from model doesn't.
-                with et.timed_action('Loss and BP time'):
+                with et.timed_action('BP time'):
                     loss = criterion(out, targets.to(device), torch.IntTensor(output_lengths), torch.IntTensor(target_lengths))
                     optimizer.zero_grad()
                     loss.mean().backward()
