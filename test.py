@@ -62,15 +62,15 @@ def test(**kwargs):
         wer = np.zeros(num_samples)
         for idx, (data) in enumerate(dataset):
             inputs, targets, file_paths, text = data
-            out = model(torch.FloatTensor(inputs).unsqueeze(0).to(device), input_lengths=torch.IntTensor([inputs.shape[1]]))
-            out_sizes = torch.IntTensor([out.size(1)])
-            predicted_texts = decoder.decode(probs=out,sizes=out_sizes)[0]
+            out, output_lengths = model(torch.FloatTensor(inputs).unsqueeze(0).to(device), input_lengths=torch.IntTensor([inputs.shape[1]]))
+            predicted_texts = decoder.decode(probs=out, sizes=output_lengths)
             cer[idx] = decoder.cer_ratio(text, predicted_texts)
             wer[idx] = decoder.wer_ratio(text, predicted_texts)
             if (idx == index_to_print and kwargs['print_samples']) or kwargs['print_all']:
                 print(text)
                 print('Decoder result: ' + predicted_texts)
                 print('Raw acoustic: ' + ''.join(map(lambda i: model.labels[i], torch.argmax(out.squeeze(), 1))))
+
     print('CER:%f, WER:%f' % (cer.mean(),wer.mean()))
     
 def set_random_seeds(seed=1337):
