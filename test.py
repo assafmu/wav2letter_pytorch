@@ -11,7 +11,7 @@ from data.data_loader import SpectrogramDataset
 from decoder import GreedyDecoder, PrefixBeamSearchLMDecoder
 
 parser = argparse.ArgumentParser(description='Wav2Letter evaluation')
-parser.add_argument('--test-manifest',metavar='DIR',help='path to test manifest csv', default='data/test.csv')
+parser.add_argument('--test-manifest',metavar='DIR',help='path to test manifest csv', default='')
 parser.add_argument('--cuda',default=False,dest='cuda',action='store_true',help='Use cuda to execute model')
 parser.add_argument('--seed',type=int,default=1337)
 parser.add_argument('--print-samples', default=False, action='store_true',help='Print some samples to output')
@@ -22,7 +22,7 @@ parser.add_argument('--lm-path',type=str,default='',help='Path to arpa lm file t
 parser.add_argument('--beam-search-params',type=str,default='5,0.3,5,1e-3', help='comma separated value for k,alpha,beta,prune. For example, 5,0.3,5,1e-3')
 parser.add_argument('--arc',default='quartz',type=str,help='Network architecture to use. Can be either "quartz" (default) or "wav2letter"')
 parser.add_argument('--mel-spec-count',default=0,type=int,help='How many channels to use in Mel Spectrogram')
-parser.add_argument('--use-mel-spec',dest='mel_spec_count',action='store_const',const=64,help='Use mel spectrogram with default value (64)')
+parser.add_argument('--use-mel-spec',dest='mel_spec_count',action='store_const',const=64,help='Use mel spectrogram with 64 filters')
 
 def get_beam_search_params(param_string):
     params = param_string.split(',')

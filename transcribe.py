@@ -11,23 +11,23 @@ from data.data_loader import SpectrogramDataset
 from decoder import GreedyDecoder, PrefixBeamSearchLMDecoder, get_time_per_word
 
 parser = argparse.ArgumentParser(description='Wav2Letter usage')
-parser.add_argument('--test-manifest',metavar='DIR',help='path to test manifest csv', default=r"")
-#change to receive file or file list
+parser.add_argument('--test-manifest',metavar='DIR',help='path to test manifest csv', default='')
 parser.add_argument('--cuda', default=False, dest='cuda', action='store_true', help='Use cuda to execute model')
 parser.add_argument('--seed', type=int, default=1337)
-parser.add_argument('--model-path', type=str, default=r"",
-                    help='Path to model.tar to use')
+parser.add_argument('--model-path', type=str, default='', help='Path to model.tar to use')
 parser.add_argument('--decoder', type=str, default='greedy',
                     help='Type of decoder to use.  "greedy", or "beam". If "beam", can specify LM with to use with "--lm-path"')
 parser.add_argument('--lm-path', type=str, default='',
                     help='Path to arpa lm file to use for testing. Default is no LM.')
 parser.add_argument('--beam-search-params', type=str, default='5,0.3,5,1e-3',
                     help='comma separated value for k,alpha,beta,prune. For example, 5,0.3,5,1e-3')
-parser.add_argument('--arc', default='wav2letter', type=str,
-                    help='Network architecture to use. Can be either "quartz"  or "wav2letter" (default)')
+parser.add_argument('--arc', default='quartz', type=str,
+                    help='Network architecture to use. Can be either "quartz" (default) or "wav2letter" ')
 parser.add_argument('--mel-spec-count', default=0, type=int, help='How many channels to use in Mel Spectrogram')
 parser.add_argument('--use-mel-spec', dest='mel_spec_count', action='store_const', const=64,
-                    help='Use mel spectrogram with default value (64)')
+                    help='Use mel spectrogram with 64 filters')
+parser.add_argument('--print-letter-times',default=False,action='store_true',help='Print predicted time for each letter')
+parser.add_argument('--print-word-times',default=False,action='store_true',help='Print predicted starting times for each word')
 
 
 def get_beam_search_params(param_string):
@@ -76,9 +76,11 @@ def transcribe(**kwargs):
             print(text)
             print('Decoder result: ' + predicted_texts)
             print('Raw acoustic: ' + ''.join(map(lambda i: model.labels[i], torch.argmax(out.squeeze(), 1))))
-            print('Timestamps per letter: '+ str([(c,o.item(),o.item() * offsets_to_time_ratio) for c,o in zip (predicted_texts,offsets)]))
-            print('Word times: '+str(get_time_per_word(predicted_texts, offsets.numpy(), offsets_to_time_ratio)))
-            break
+            if kwargs['print_letter_times']:
+                print('Timestamps per letter: '+ str([(c,o.item(),o.item() * offsets_to_time_ratio) for c,o in zip (predicted_texts,offsets)]))
+            if kwargs['print_word_times']:
+                print('Word times: '+str(get_time_per_word(predicted_texts, offsets.numpy(), offsets_to_time_ratio)))
+
 
 
 

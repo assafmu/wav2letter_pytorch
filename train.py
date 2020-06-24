@@ -23,8 +23,8 @@ from torch.utils.data import BatchSampler, SequentialSampler
 from novograd import Novograd
 
 parser = argparse.ArgumentParser(description='Wav2Letter training')
-parser.add_argument('--train-manifest',help='path to train manifest csv', default='/datadrive/librispeech/small_df.csv')
-parser.add_argument('--val-manifest',help='path to validation manifest csv',default='/datadrive/librispeech/small_df.csv')
+parser.add_argument('--train-manifest',help='path to train manifest csv', default='')
+parser.add_argument('--val-manifest',help='path to validation manifest csv',default='')
 parser.add_argument('--sample-rate',default=8000,type=int,help='Sample rate')
 parser.add_argument('--window-size',default=.02,type=float,help='Window size for spectrogram in seconds')
 parser.add_argument('--window-stride',default=.01,type=float,help='Window sstride for spectrogram in seconds')
@@ -35,13 +35,10 @@ parser.add_argument('--warmup',default=0.2,type=int,help='Percent of steps to wa
 parser.add_argument('--lr-sched',default='const',type=str,help='Which learning rate scheduler to use. Can be either const, cosine, or onecycle')
 parser.add_argument('--batch-size',default=8,type=int,help='Batch size to use during training')
 parser.add_argument('--momentum',default=0.9,type=float,help='Momentum')
-parser.add_argument('--tensorboard',default=True, dest='tensorboard', action='store_true',help='Turn on tensorboard graphing')
-parser.add_argument('--no-tensorboard',dest='tensorboard',action='store_false',help='Turn off tensorboard graphing')
-parser.add_argument('--log-dir',default='visualize/wav2letter',type=str,help='Directory for tensorboard logs')
+parser.add_argument('--tensorboard',default='', dest='tensorboard', action='store_true',help='Save tensorboard logs to the specified directory. Defaults to none (no tensorboard logging)')
+parser.add_argument('--model-dir',default='',help='Directory to save models. Defaults to none (no models saved)')
+parser.add_argument('--name',default='',help='Name to use for tensorboard and model dir, if not specified. Values will be visualize/{name} and models/{name} respectively.')
 parser.add_argument('--seed',type=int,default=1234)
-parser.add_argument('--id',default='Wav2letter training',help='Tensorboard id')
-parser.add_argument('--model-dir',default='',help='Directory to save models. Set as empty, or use --no-model-save to disable saving.')
-parser.add_argument('--no-model-save',dest='model_dir',action='store_const',const='')
 parser.add_argument('--layers',default=1,type=int,help='Number of Conv1D blocks, between 1 and 16. 2 Additional last layers are always added.')
 parser.add_argument('--labels',default='english',type=str,help='Name of label set to use')
 parser.add_argument('--print-samples',default=False,action='store_true',help='Print samples from each epoch')
@@ -51,9 +48,8 @@ parser.add_argument('--epochs-per-save',default=5,type=int,help='How many epochs
 parser.add_argument('--arc',default='quartz',type=str,help='Network architecture to use. Can be either "quartz" (default) or "wav2letter"')
 parser.add_argument('--optimizer',default='sgd',type=str,help='Optimizer to use. can be either "sgd" (default) or "novograd". Note that novograd only accepts --lr parameter.')
 parser.add_argument('--mel-spec-count',default=0,type=int,help='How many channels to use in Mel Spectrogram')
-parser.add_argument('--use-mel-spec',dest='mel_spec_count',action='store_const',const=64,help='Use mel spectrogram with default value (64)')
+parser.add_argument('--use-mel-spec',dest='mel_spec_count',action='store_const',const=64,help='Use mel spectrogram with 64 filters')
 parser.add_argument('--augment',default='none',help='Choose augmentation to use. Can be either none (default), specaugment (SpecAugment) or speccutout (SpecCutout)')
-
 
 
 def get_audio_conf(args):
@@ -117,9 +113,11 @@ def train(**kwargs):
     train_dataset, train_batch_loader, eval_dataset = init_datasets(kwargs)
     model = init_model(kwargs,train_dataset.data_channels())
     print('Model and datasets initialized')
+    if kwargs['name']:
+        kwargs['tensorboard'] = kwargs['tensorboard'] or 'visualize/%s' % kwargs['name']
+        kwargs['model_dir'] = kwargs['model_dir'] or 'models/%s' % kwargs['name']
     if kwargs['tensorboard']:
-        setup_tensorboard(kwargs['log_dir'])
-        # TODO: Dump kwargs to log_dir for later documentation
+        setup_tensorboard(kwargs['tensorboard'])
     training_loop(model,kwargs, train_dataset, train_batch_loader, eval_dataset)   
     if kwargs['tensorboard']:
         _tensorboard_writer.close()
@@ -157,7 +155,6 @@ def training_loop(model, kwargs, train_dataset, train_batch_loader, eval_dataset
                         lr_scheduler.step((epoch * batch_count + idx) - kwargs['warmup'] * epochs * batch_count)
                     else:
                         lr_scheduler.step(epoch*batch_count + idx)
-                    # print(optimizer.state_dict()['param_groups'][0]['lr'])
                 total_loss += loss.mean().item()
             log_loss_to_tensorboard(epoch, total_loss / batch_count)
             evaluate(model,eval_dataset,greedy_decoder,epoch,kwargs)

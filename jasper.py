@@ -1,4 +1,13 @@
 # -*- coding: utf-8 -*-
+'''
+Copied from https://github.com/NVIDIA/DeepLearningExamples. Specifically,
+https://github.com/NVIDIA/DeepLearningExamples/blob/master/PyTorch/SpeechRecognition/Jasper/model.py
+
+Not original code!
+
+Minor edits were made.
+'''
+
 from typing import List, Optional, Tuple
 
 import torch
