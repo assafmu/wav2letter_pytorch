@@ -115,7 +115,7 @@ class GreedyDecoder(Decoder):
                     offsets.append(i)
         return string, torch.IntTensor(offsets)
 
-    def decode(self, probs, sizes=None):
+    def decode(self, probs, sizes=None, return_offsets=False):
         """
         Returns the argmax decoding given the probability matrix. Removes
         repeated elements in the sequence, as well as blanks.
@@ -127,9 +127,18 @@ class GreedyDecoder(Decoder):
             strings: sequences of the model's best guess for the transcription on inputs
             offsets: time step per character predicted
         """
+        if len(probs.shape) == 2:
+            return self.decode(probs.unsqueeze(0), sizes, return_offsets)
+
         _, max_probs = torch.max(probs, 2)
         strings, offsets = self.convert_to_strings(max_probs.view(max_probs.size(0), max_probs.size(1)), sizes,
                                                    remove_repetitions=True, return_offsets=True)
+
+        if probs.shape[0] == 1:
+            strings = strings[0]
+            offsets = offsets[0]
+        if return_offsets:
+            return strings[0], offsets[0]
         return strings[0]
     
 def prefix_beam_search(ctc, labels, blank_index=0, lm=None,k=5,alpha=0.3,beta=5,prune=0.001,end_char='>',return_weights=False):
@@ -149,7 +158,7 @@ def prefix_beam_search(ctc, labels, blank_index=0, lm=None,k=5,alpha=0.3,beta=5,
     """
     assert (ctc.shape[1] == len(labels)), "ctc size:%d, labels: %d" % (ctc.shape[1], len(labels))
     assert ctc.shape[0] > 1, "ctc length: %d was too short" % ctc.shape[0]
-    assert (ctc > 0).all(), 'ctc output contains negative numbers'
+    assert (ctc >= 0).all(), 'ctc output contains negative numbers'
     lm = (lambda l: 1) if lm is None else lm # if no LM is provided, just set to function returning 1
     word_count_re = re.compile(r'\w+[\s|>]')
     W = lambda l: word_count_re.findall(l)
@@ -244,11 +253,47 @@ class PrefixBeamSearchLMDecoder(Decoder):
         self.beta=beta
         self.prune=prune
         
-    def decode(self,probs,sizes=None):
+    def decode(self, probs, sizes=None, return_offsets=False):
+        if return_offsets:
+            raise NotImplementedError("Prefix beam search does not support offsets (yet).")
         if len(probs.shape) == 2: # Single    
             return prefix_beam_search(probs,self.labels,self.blank_index,self.lm_weigh,self.k,self.alpha,self.beta,self.prune)
         elif len(probs.shape) == 3: # Batch
             return [self.decode(prob) for prob in probs]
         else:
             raise RuntimeError('Decoding with wrong shape: %s, expected either [Batch X Frames X Labels] or [Frames X Labels]' % str(probs.shape))
-    
+
+
+def get_time_per_word(predictions, offsets, ratio=1.0):
+    """
+    Compute the start and end time for each word outputed by the model (and decoder), based on offsets.
+
+    Note that end time per word consider only the first instance of the last character in the word - This might result in slightly earlier end timings when the model predicts repetitions.
+    Args:
+        predictions (list(str)): The list of characters predicted.
+        offsets (list(int)): the list of offsets for each character.
+        ratio (float, optional): The ratio between output sequence length and input seconds. Can be computed as (sample rate) * (window stride).
+    """
+    word_times = []
+    assert len(predictions) == len(offsets)
+    current_word = ''
+    start_time = -1
+    end_time = -1
+    for letter,offset in zip(predictions,offsets):
+        if letter == ' ' and current_word:
+            word_times.append((current_word,start_time,end_time))
+            current_word = ''
+            start_time = -1
+            end_time = -1
+        if letter == ' ' and not current_word:
+            continue # Nothing to do
+        if current_word:
+            end_time = offset * ratio
+            current_word += letter
+        if not current_word:
+            start_time = offset * ratio
+            end_time = offset * ratio
+            current_word = letter
+    if current_word:
+        word_times.append((current_word,start_time,end_time))
+    return word_times

@@ -25,14 +25,78 @@ def load_audio(path):
             sound = sound.mean(axis=1)
     return sound
 
+class SpectrogramExtractor(object):
+    def __init__(self,audio_conf,mel_spec=None,use_cuda=False):
+        self.window_stride = audio_conf['window_stride']
+        self.window_size = audio_conf['window_size']
+        self.sample_rate = audio_conf['sample_rate']
+        self.window = windows.get(audio_conf['window'], windows['hamming'])
+        self.use_cuda = use_cuda
+        self.mel_spec = mel_spec
+
+        self.n_fft = int(self.sample_rate * self.window_size)
+        self.win_length = self.n_fft
+        self.hop_length = int(self.sample_rate * self.window_stride)
+        if mel_spec:  # import dedicated libraries
+            if use_cuda:
+                import torchaudio
+            else:
+                import python_speech_features
+
+    def _get_spect(self, audio):
+        if self.mel_spec:
+            return self._get_mel_spectogram(audio)
+        else:
+            return self._get_spectrogram(audio)
+
+    def _get_mel_spectogram(self, audio):
+        if self.use_cuda:
+            import torchaudio
+            transform = torchaudio.transforms.MelSpectrogram(sample_rate=self.sample_rate, n_fft=self.n_fft,
+                                                             n_mels=self.mel_spec)
+            return transform(torch.Tensor(audio))
+        else:
+            import python_speech_features
+            spect, energy = python_speech_features.fbank(audio, samplerate=self.sample_rate,
+                                                         winlen=self.window_size, winstep=self.window_stride,
+                                                         winfunc=np.hamming, nfilt=self.mel_spec, nfft=self.n_fft)
+            return spect.T
+    def _get_spectrogram(self, audio):
+        if self.use_cuda:
+            e = torch.stft(torch.FloatTensor(audio), self.n_fft, self.hop_length, self.win_length,
+                           window=torch.hamming_window(self.win_length))
+            magnitudes = abs(e.sum(dim=2))
+            return magnitudes
+        else:
+            D = librosa.stft(audio, n_fft=self.n_fft, hop_length=self.hop_length, win_length=self.win_length,
+                             window=scipy.signal.hamming)
+            spect, phase = librosa.magphase(D)
+            return spect
+
+    def extract(self,signal):
+        epsilon = 1e-5
+        log_zero_guard_value=2 ** -24
+        spect = self._get_spect(signal)
+        spect = np.log1p(spect + log_zero_guard_value)
+        # normlize across time
+        mean = spect.mean(axis=1)
+        std = spect.std(axis=1)
+        std += epsilon
+        spect = spect - mean.reshape(-1, 1)
+        spect = spect / std.reshape(-1, 1)
+        return spect
+
+
 class SpectrogramDataset(Dataset):
-    def __init__(self, manifest_filepath, audio_conf, labels):
+    def __init__(self, manifest_filepath, audio_conf, labels, mel_spec=None, use_cuda=False):
         '''
         Create a dataset for ASR. Audio conf and labels can be re-used from the model.
         Arguments:
             manifest_filepath (string): path to the manifest. Can be a csv containing either path-text pairs, or a pandas DataFrame with columns "filepath" and "text"
             audio_conf (dict): dict containing sample rate, and window size stride and type. 
             labels (list): list containing all valid labels in the text.
+            mel_spec(int or None): if not None, use mel spectrogram with that many channels.
+            use_cuda(bool): Use torch and torchaudio for stft. Can speed up extraction on GPU.
         '''
         super(SpectrogramDataset, self).__init__()
         prefix_df = pd.read_csv(manifest_filepath,index_col=0,nrows=2)
@@ -44,10 +108,23 @@ class SpectrogramDataset(Dataset):
         self.window_stride = audio_conf['window_stride']
         self.window_size = audio_conf['window_size']
         self.sample_rate = audio_conf['sample_rate']
-        self.window = audio_conf['window']
         self.window = windows.get(audio_conf['window'], windows['hamming'])
+        self.use_cuda = use_cuda
+        self.mel_spec = mel_spec
         self.labels_map = dict([(labels[i],i) for i in range(len(labels))])
         self.validate_sample_rate()
+        self.extractor = SpectrogramExtractor(audio_conf,mel_spec,use_cuda)
+        self.preprocess_spectrograms()
+        
+    
+    def preprocess_spectrograms(self):
+        self.spects = {}
+        for i in range(self.size):
+            audio_path = self.df.filepath.iloc[i]
+            spect = self.parse_audio(audio_path)
+            self.spects[i] = spect
+            if self.size > 100 and i % (self.size // 20) == 0:
+                print("Processed %d out of %d spects" % (i, self.size))
         
     def __getitem__(self, index):
         sample = self.df.iloc[index]
@@ -55,25 +132,13 @@ class SpectrogramDataset(Dataset):
         if 'א' in self.labels_map: #Hebrew!
             import data.language_specific_tools
             transcript = data.language_specific_tools.hebrew_final_to_normal(transcript)
-        spect = self.parse_audio(audio_path)
+        spect = self.spects[index]
         target = list(filter(None,[self.labels_map.get(x) for x in list(transcript)]))
         return spect, target, audio_path, transcript
-    
+
     def parse_audio(self,audio_path):
         y = load_audio(audio_path)
-        n_fft = int(self.sample_rate * self.window_size)
-        win_length = n_fft
-        hop_length = int(self.sample_rate * self.window_stride)
-        
-        D = librosa.stft(y, n_fft=n_fft, hop_length = hop_length, win_length=win_length,window=self.window)
-        
-        spect, phase = librosa.magphase(D)
-        
-        spect = np.log1p(spect)
-        mean = spect.mean()
-        std = spect.std()
-        spect = np.add(spect,-mean)
-        spect = spect / std
+        spect = self.extractor.extract(y)
         return spect
     
     def validate_sample_rate(self):
@@ -83,6 +148,12 @@ class SpectrogramDataset(Dataset):
     
     def __len__(self):
         return self.size
+    
+    def data_channels(self):
+        '''
+        How many channels are returned in each example.
+        '''
+        return self.mel_spec or int(1+(int(self.sample_rate * self.window_size)/2))
 
 def _collator(batch):
     inputs, targets, file_paths, texts = zip(*batch)
@@ -90,7 +161,7 @@ def _collator(batch):
     target_lengths = list(map(len,targets))
     longest_input = max(input_lengths)
     longest_target = max(target_lengths)
-    pad_function = lambda x:np.pad(x,((0,0),(0,longest_input-x.shape[1])),mode='wrap')
+    pad_function = lambda x:np.pad(x,((0,0),(0,longest_input-x.shape[1])),mode='constant')
     inputs = torch.FloatTensor(list(map(pad_function,inputs)))
     targets = torch.IntTensor([np.pad(np.array(t),(0,longest_target-len(t)),mode='constant') for t in targets])
     return inputs, input_lengths, targets, target_lengths, file_paths, texts

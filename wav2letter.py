@@ -29,11 +29,15 @@ class Conv1dBlock(nn.Module):
         '''Padding Calculation'''
         input_rows = input_channels
         filter_rows = kernel_size[0]
-        effective_filter_size_rows = (filter_rows - 1) * dilation + 1
         out_rows = (input_rows + stride - 1) // stride
-        self.padding_needed = max(0,(out_rows -1) * stride + effective_filter_size_rows - input_rows)
         self.padding_rows = max(0, (out_rows -1) * stride + (filter_rows -1) * dilation + 1 - input_rows)
-        self.paddingAdded = nn.ReflectionPad1d(self.padding_rows //2) if self.padding_rows > 0 else identity()
+        if self.padding_rows > 0:
+            if self.padding_rows % 2 == 0:
+                self.paddingAdded = nn.ReflectionPad1d(self.padding_rows // 2)
+            else:
+                self.paddingAdded = nn.ReflectionPad1d((self.padding_rows //2,(self.padding_rows +1)//2))
+        else:
+            self.paddingAdded =  identity()
         self.conv1 = nn.Conv1d(in_channels=input_channels,out_channels=output_channels,
                           kernel_size=kernel_size,stride=stride,padding=0,dilation=dilation)
         self.batch_norm = nn.BatchNorm1d(num_features=output_channels,momentum=0.9,eps=0.001) if bn else identity()
@@ -49,14 +53,15 @@ class Conv1dBlock(nn.Module):
         return output
 
 class Wav2Letter(nn.Module):
-    def __init__(self,labels='abc',audio_conf=None,mid_layers=1):
+    def __init__(self,labels='abc',audio_conf=None,mid_layers=1,input_size=None):
         super(Wav2Letter,self).__init__()
         self.audio_conf = audio_conf
         self.labels = labels
         self.mid_layers = mid_layers
-
-        nfft = (self.audio_conf['sample_rate'] * self.audio_conf['window_size'])
-        input_size = int(1+(nfft/2))
+        if not input_size:
+            nfft = (self.audio_conf['sample_rate'] * self.audio_conf['window_size'])
+            input_size = int(1+(nfft/2))
+        self.input_size = input_size
 
         conv1 = Conv1dBlock(input_channels=input_size,output_channels=256,kernel_size=(11,),stride=2,dilation=1,drop_out_prob=0.2)
         conv2s = []
@@ -85,21 +90,23 @@ class Wav2Letter(nn.Module):
         last_layer = Conv1dBlock(input_channels=layer_size, output_channels=len(self.labels), kernel_size=(1,), stride=1,bn=False,activation_use=False)
         conv_blocks.append(('conv1d_{}'.format(len(layers)),last_layer))
         self.conv1ds = nn.Sequential(OrderedDict(conv_blocks))
+        strides = []
+        for module in self.conv1ds.children():
+            strides.append(module.conv1.stride[0])
+        self.scaling_factor = int(np.prod(strides))
 
-    def forward(self, x):
+    def forward(self, x, input_lengths=None):
         x = self.conv1ds(x)
         x = x.transpose(1,2)
         if self.training:
             x = F.log_softmax(x,dim=-1)
         else:
             x = F.softmax(x,dim=-1)
-        return x
-    
-    def get_scaling_factor(self):
-        strides = []
-        for module in self.conv1ds.children():
-            strides.append(module.conv1.stride[0])
-        return np.prod(strides)
+        if input_lengths is not None:
+            output_lengths = [l // self.scaling_factor for l in input_lengths]
+        else:
+            output_lengths = None
+        return x, output_lengths
     
     @classmethod
     def load_model(cls,path):
@@ -108,7 +115,7 @@ class Wav2Letter(nn.Module):
     
     @classmethod
     def load_model_package(cls,package):
-        model = cls(labels=package['labels'],audio_conf=package['audio_conf'],mid_layers=package['layers'])
+        model = cls(labels=package['labels'],audio_conf=package['audio_conf'],mid_layers=package['layers'],input_size=package.get('input_size'))
         model.load_state_dict(package['state_dict'])
         return model
 
@@ -118,17 +125,12 @@ class Wav2Letter(nn.Module):
                 'audio_conf':model.audio_conf,
                 'labels':model.labels,
                 'layers':model.mid_layers,
+                'input_size':model.input_size,
                 'state_dict':model.state_dict()
                 }
         return package
 
     @staticmethod
     def get_param_size(model):
-        params = 0
-        for p in model.parameters():
-            tmp = 1
-            for x in p.size():
-                tmp*=x
-            params +=tmp
-        return params
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
     
