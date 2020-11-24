@@ -4,6 +4,7 @@ from __future__ import division
 
 import os
 import subprocess
+import json
 
 import librosa
 import numpy as np
@@ -11,6 +12,7 @@ import scipy.signal
 from scipy.io import wavfile
 import torch
 from torch.utils.data import Dataset,DataLoader
+import torch.nn.functional as F
 import pandas as pd
 
 windows = {'hamming': scipy.signal.hamming, 'hann': scipy.signal.hann, 'blackman': scipy.signal.blackman,'bartlett':scipy.signal.bartlett}
@@ -100,10 +102,13 @@ class SpectrogramDataset(Dataset):
         '''
         super(SpectrogramDataset, self).__init__()
         prefix_df = pd.read_csv(manifest_filepath,index_col=0,nrows=2)
-        if not {'filepath','text'}.issubset(prefix_df.columns):
-            self.df = pd.read_csv(manifest_filepath,header=None,names=['filepath','text'])
-        else:
-            self.df = pd.read_csv(manifest_filepath,index_col=0)
+        #if not {'filepath','text'}.issubset(prefix_df.columns):
+        #    self.df = pd.read_csv(manifest_filepath,header=None,names=['filepath','text'])
+        #else:
+        #    self.df = pd.read_csv(manifest_filepath,index_col=0)
+        with open(manifest_filepath) as f:
+            lines = f.readlines()
+        self.df = pd.DataFrame(map(json.loads,lines))
         self.size = len(self.df)
         self.window_stride = audio_conf['window_stride']
         self.window_size = audio_conf['window_size']
@@ -120,7 +125,7 @@ class SpectrogramDataset(Dataset):
     def preprocess_spectrograms(self):
         self.spects = {}
         for i in range(self.size):
-            audio_path = self.df.filepath.iloc[i]
+            audio_path = self.df.audio_filepath.iloc[i]
             spect = self.parse_audio(audio_path)
             self.spects[i] = spect
             if self.size > 100 and i % (self.size // 20) == 0:
@@ -128,7 +133,7 @@ class SpectrogramDataset(Dataset):
         
     def __getitem__(self, index):
         sample = self.df.iloc[index]
-        audio_path, transcript = sample.filepath, sample.text
+        audio_path, transcript = sample.audio_filepath, sample.text
         if 'א' in self.labels_map: #Hebrew!
             import data.language_specific_tools
             transcript = data.language_specific_tools.hebrew_final_to_normal(transcript)
@@ -142,7 +147,7 @@ class SpectrogramDataset(Dataset):
         return spect
     
     def validate_sample_rate(self):
-        audio_path = self.df.iloc[0].filepath
+        audio_path = self.df.iloc[0].audio_filepath
         sr,sound = wavfile.read(audio_path)
         assert sr == self.sample_rate, 'Expected sample rate %d but found %d in first file' % (self.sample_rate,sr)
     
@@ -157,10 +162,10 @@ class SpectrogramDataset(Dataset):
 
 def _collator(batch):
     inputs, targets, file_paths, texts = zip(*batch)
-    input_lengths = list(map(lambda input: input.shape[1], inputs))
-    target_lengths = list(map(len,targets))
-    longest_input = max(input_lengths)
-    longest_target = max(target_lengths)
+    input_lengths = torch.IntTensor(list(map(lambda input: input.shape[1], inputs)))
+    target_lengths = torch.IntTensor(list(map(len,targets)))
+    longest_input = max(input_lengths).item()
+    longest_target = max(target_lengths).item()
     pad_function = lambda x:np.pad(x,((0,0),(0,longest_input-x.shape[1])),mode='constant')
     inputs = torch.FloatTensor(list(map(pad_function,inputs)))
     targets = torch.IntTensor([np.pad(np.array(t),(0,longest_target-len(t)),mode='constant') for t in targets])

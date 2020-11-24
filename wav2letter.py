@@ -4,16 +4,9 @@ import librosa
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import pytorch_lightning as ptl
 import numpy as np
 
-try:
-    identity = nn.Identity
-except AttributeError as e: #PyTorch <1.1.0 support
-    class identity(nn.Module):
-        def __init__(self,*args,**kwargs):
-            super(identity,self).__init__()
-        def forward(self,xs):
-            return xs
 
 class Conv1dBlock(nn.Module):
     def __init__(self,input_channels,output_channels,kernel_size,stride,drop_out_prob=-1.0,dilation=1,bn=True,activation_use=True):
@@ -37,11 +30,11 @@ class Conv1dBlock(nn.Module):
             else:
                 self.paddingAdded = nn.ReflectionPad1d((self.padding_rows //2,(self.padding_rows +1)//2))
         else:
-            self.paddingAdded =  identity()
+            self.paddingAdded =  nn.Identity()
         self.conv1 = nn.Conv1d(in_channels=input_channels,out_channels=output_channels,
                           kernel_size=kernel_size,stride=stride,padding=0,dilation=dilation)
-        self.batch_norm = nn.BatchNorm1d(num_features=output_channels,momentum=0.9,eps=0.001) if bn else identity()
-        self.drop_out = nn.Dropout(drop_out_prob) if self.drop_out_prob != -1 else identity()
+        self.batch_norm = nn.BatchNorm1d(num_features=output_channels,momentum=0.9,eps=0.001) if bn else nn.Identity()
+        self.drop_out = nn.Dropout(drop_out_prob) if self.drop_out_prob != -1 else nn.Identity()
 
     def forward(self,xs):
         xs = self.paddingAdded(xs)
@@ -52,7 +45,7 @@ class Conv1dBlock(nn.Module):
             output = torch.clamp(input=output,min=0,max=20)
         return output
 
-class Wav2Letter(nn.Module):
+class Wav2Letter(ptl.LightningModule):
     def __init__(self,labels='abc',audio_conf=None,mid_layers=1,input_size=None):
         super(Wav2Letter,self).__init__()
         self.audio_conf = audio_conf
@@ -94,6 +87,8 @@ class Wav2Letter(nn.Module):
         for module in self.conv1ds.children():
             strides.append(module.conv1.stride[0])
         self.scaling_factor = int(np.prod(strides))
+        self.criterion = nn.CTCLoss(blank=0,reduction='mean')
+
 
     def forward(self, x, input_lengths=None):
         x = self.conv1ds(x)
@@ -103,34 +98,23 @@ class Wav2Letter(nn.Module):
         else:
             x = F.softmax(x,dim=-1)
         if input_lengths is not None:
-            output_lengths = [l // self.scaling_factor for l in input_lengths]
+            output_lengths = input_lengths // self.scaling_factor
         else:
             output_lengths = None
         return x, output_lengths
     
-    @classmethod
-    def load_model(cls,path):
-        package = torch.load(path,map_location = lambda storage, loc: storage)
-        return cls.load_model_package(package)
+    def configure_optimizers(self):
+        return torch.optim.SGD(self.parameters(),lr=1e-5,momentum=0.9,nesterov=True,weight_decay=1e-5)#Fill this out later
     
-    @classmethod
-    def load_model_package(cls,package):
-        model = cls(labels=package['labels'],audio_conf=package['audio_conf'],mid_layers=package['layers'],input_size=package.get('input_size'))
-        model.load_state_dict(package['state_dict'])
-        return model
-
-    @staticmethod
-    def serialize(model):
-        package = {
-                'audio_conf':model.audio_conf,
-                'labels':model.labels,
-                'layers':model.mid_layers,
-                'input_size':model.input_size,
-                'state_dict':model.state_dict()
-                }
-        return package
-
-    @staticmethod
-    def get_param_size(model):
-        return sum(p.numel() for p in model.parameters() if p.requires_grad)
+    def training_step(self, batch, batch_idx):
+        inputs, input_lengths, targets, target_lengths, file_paths, texts = batch
+        out, output_lengths = self.forward(inputs,input_lengths)
+        return self.criterion(out.transpose(0,1),targets,output_lengths,target_lengths)
     
+    def validation_step(self, batch, batch_idx):
+        inputs, input_lengths, targets, target_lengths, file_paths, texts = batch
+        out, output_lengths = self.forward(inputs,input_lengths)
+        return self.criterion(out.transpose(0,1),targets,output_lengths,target_lengths)
+
+
+
