@@ -7,7 +7,8 @@ import torch.nn.functional as F
 import pytorch_lightning as ptl
 import numpy as np
 
- 
+from base_asr_models import ConvCTCASR 
+
 class Conv1dBlock(nn.Module):
     def __init__(self,input_channels,output_channels,kernel_size,stride,drop_out_prob=-1.0,dilation=1,bn=True,activation_use=True):
         super(Conv1dBlock, self).__init__()
@@ -45,11 +46,9 @@ class Conv1dBlock(nn.Module):
             output = torch.clamp(input=output,min=0,max=20)
         return output
 
-class Wav2Letter(ptl.LightningModule):
+class Wav2Letter(ConvCTCASR):
     def __init__(self,labels='abc',audio_conf=None,mid_layers=1,input_size=None):
-        super(Wav2Letter,self).__init__()
-        self.audio_conf = audio_conf
-        self.labels = labels
+        super(Wav2Letter,self).__init__(labels,audio_conf)
         self.mid_layers = mid_layers
         if not input_size:
             nfft = (self.audio_conf['sample_rate'] * self.audio_conf['window_size'])
@@ -84,13 +83,10 @@ class Wav2Letter(ptl.LightningModule):
         conv_blocks.append(('conv1d_{}'.format(len(layers)),last_layer))
         self.conv1ds = nn.Sequential(OrderedDict(conv_blocks))
         
-        self.criterion = nn.CTCLoss(blank=0, reduction='mean', zero_infinity=True)
-        print('LABELS:  '+str(self.labels))
-        self._scaling_factor = None
     
     @property
     def scaling_factor(self):
-        if self._scaling_factor is None:
+        if not hasattr(self,'_scaling_factor'):
             strides = []
             for module in self.conv1ds.children():
                 strides.append(module.conv1.stride[0])
@@ -107,28 +103,7 @@ class Wav2Letter(ptl.LightningModule):
         else:
             output_lengths = None
         return x, output_lengths
-    
-    def configure_optimizers(self):
-        return torch.optim.SGD(self.parameters(),lr=1e-5,momentum=0.9,nesterov=True,weight_decay=1e-5)#Fill this out later
-    
-    def training_step(self, batch, batch_idx):
-        inputs, input_lengths, targets, target_lengths, file_paths, texts = batch
-        out, output_lengths = self.forward(inputs,input_lengths)
-        loss = self.criterion(out.transpose(0,1),targets,output_lengths,target_lengths)
-        self.log_dict({'train_loss':loss})
-        return loss
-    
-    def validation_step(self, batch, batch_idx):
-        inputs, input_lengths, targets, target_lengths, file_paths, texts = batch
-        #print(len(texts[0]))
-        out, output_lengths = self.forward(inputs,input_lengths)
-        #print(targets)
-        #print(inputs.shape,input_lengths,targets,target_lengths,out.shape,output_lengths)
-        loss = self.criterion(out.transpose(0,1),targets,output_lengths,target_lengths)
-        greedy_outputs = out.argmax(dim=-1,keepdim=False)
-        
-        self.log_dict({'val_loss':loss})
-        return loss
+
 
 
 

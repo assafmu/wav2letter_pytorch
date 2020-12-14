@@ -1,0 +1,15 @@
+train_manifest: ???
+val_manifest: ???
+model:
+    mid_layers: 1
+audio_conf:
+    window: hamming
+    window_stride: 0.01
+    window_size: 0.02
+    sample_rate: 16000
+trainer:
+    default_root_dir: .
+    max_epochs: 5
+    max_steps: null
+    gpus: 0
+    

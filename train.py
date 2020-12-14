@@ -15,6 +15,8 @@ import argparse
 import tqdm
 import glob
 import pytorch_lightning
+import hydra
+from omegaconf import DictConfig, OmegaConf
 
 from data import label_sets, augmentations
 from wav2letter import Wav2Letter
@@ -102,12 +104,11 @@ def get_data_loaders(labels,audio_conf,train_manifest,val_manifest,batch_size,me
     val_batch_loader = BatchAudioDataLoader(eval_dataset,batch_size=batch_size)
     return train_batch_loader, val_batch_loader
 
-def main():
-    arguments = parser.parse_args()
-    audio_conf = {"window":"hamming","window_stride":0.01,"window_size":0.02,"sample_rate":16000}
-    train_loader, val_loader = get_data_loaders('english_lowercase',audio_conf,arguments.train_manifest,arguments.val_manifest,4,64)
-    model = Wav2Letter(label_sets.labels_map['english_lowercase'],audio_conf,mid_layers=1,input_size=64)
-    trainer = pytorch_lightning.Trainer(default_root_dir=arguments.default_root_dir) # override trainer.default_root_dir with "~/wav2letter_workdir" or something.
+@hydra.main(config_name='config')
+def main(cfg: DictConfig):
+    train_loader, val_loader = get_data_loaders('english_lowercase',cfg.audio_conf,cfg.train_manifest,cfg.val_manifest,4,64)
+    model = Wav2Letter(label_sets.labels_map['english_lowercase'],audio_conf=cfg.audio_conf,input_size=64,**cfg.model)
+    trainer = pytorch_lightning.Trainer(**cfg.trainer)
     trainer.fit(model,train_loader,val_loader)
     
 
