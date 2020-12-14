@@ -2,14 +2,22 @@ train_manifest: ???
 val_manifest: ???
 model:
     mid_layers: 1
-audio_conf:
-    window: hamming
-    window_stride: 0.01
-    window_size: 0.02
-    sample_rate: 16000
+    input_size: 64
+    audio_conf:
+        window: hamming
+        window_stride: 0.01
+        window_size: 0.02
+        sample_rate: 16000
+    labels: english_lowercase
+    decoder:
+        _target_: decoder.GreedyDecoder
+        labels: ${model.labels}
 trainer:
     default_root_dir: .
     max_epochs: 5
     max_steps: null
     gpus: 0
     
+hydra:
+    run:
+        dir: ${trainer.default_root_dir}

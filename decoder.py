@@ -6,6 +6,8 @@ import re
 from collections import defaultdict, Counter
 import numpy as np
 
+import data.label_sets
+
 class Decoder(object):
     """
     Basic decoder class from which all other decoders inherit. Implements several
@@ -18,8 +20,7 @@ class Decoder(object):
     """
 
     def __init__(self, labels, blank_index=0):
-        # e.g. labels = "_'ABCDEFGHIJKLMNOPQRSTUVWXYZ#"
-        self.labels = labels
+        self.labels = data.label_sets.labels_map[labels] if type(labels) is str else labels
         self.int_to_char = dict([(i, c) for (i, c) in enumerate(labels)])
         self.blank_index = blank_index
         space_index = len(labels)  # To prevent errors in decode, we add an out of bounds index for the space

@@ -100,7 +100,7 @@ class MaskedConv1d(nn.Module):
             groups=groups,
             bias=bias,
         )
-        self.use_mask = use_mask
+        self.use_mask = use_mask 
         self.heads = heads
 
     def get_seq_len(self, lens):

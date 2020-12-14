@@ -95,9 +95,8 @@ def get_augmentor(kwargs):
     return augmentations.Identity()
 
     
-def get_data_loaders(labels,audio_conf,train_manifest,val_manifest,batch_size,mel_spec):
-    
-    labels = label_sets.labels_map[labels]
+def get_data_loaders(labels,audio_conf,train_manifest,val_manifest,batch_size,mel_spec): 
+    #labels = label_sets.labels_map[labels]
     train_dataset = SpectrogramDataset(train_manifest, audio_conf, labels,mel_spec=mel_spec)
     train_batch_loader = BatchAudioDataLoader(train_dataset, batch_size=batch_size)
     eval_dataset = SpectrogramDataset(val_manifest, audio_conf, labels,mel_spec=mel_spec)
@@ -106,8 +105,10 @@ def get_data_loaders(labels,audio_conf,train_manifest,val_manifest,batch_size,me
 
 @hydra.main(config_name='config')
 def main(cfg: DictConfig):
-    train_loader, val_loader = get_data_loaders('english_lowercase',cfg.audio_conf,cfg.train_manifest,cfg.val_manifest,4,64)
-    model = Wav2Letter(label_sets.labels_map['english_lowercase'],audio_conf=cfg.audio_conf,input_size=64,**cfg.model)
+    if type(cfg.model.labels) is str:
+        cfg.model.labels = label_sets.labels_map[cfg.model.labels]
+    train_loader, val_loader = get_data_loaders(cfg.model.labels,cfg.model.audio_conf,cfg.train_manifest,cfg.val_manifest,4,64) #melspec, batch size, should be derived from config, and melspec should be interpolated
+    model = Wav2Letter(cfg.model)
     trainer = pytorch_lightning.Trainer(**cfg.trainer)
     trainer.fit(model,train_loader,val_loader)
     

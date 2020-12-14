@@ -47,18 +47,15 @@ class Conv1dBlock(nn.Module):
         return output
 
 class Wav2Letter(ConvCTCASR):
-    def __init__(self,labels='abc',audio_conf=None,mid_layers=1,input_size=None):
-        super(Wav2Letter,self).__init__(labels,audio_conf)
-        self.mid_layers = mid_layers
-        if not input_size:
+    def __init__(self,cfg):
+        super(Wav2Letter,self).__init__(cfg)
+        self.mid_layers = cfg.mid_layers
+        if not cfg.input_size:
             nfft = (self.audio_conf['sample_rate'] * self.audio_conf['window_size'])
-            input_size = int(1+(nfft/2))
-        self.input_size = input_size
+            self.input_size = int(1+(nfft/2))
+        else:
+            self.input_size = cfg.input_size
 
-        conv1 = Conv1dBlock(input_channels=input_size,output_channels=256,kernel_size=(11,),stride=2,dilation=1,drop_out_prob=0.2)
-        conv2s = []
-        conv2s.append(('conv1d_0',conv1))
-        layer_size = conv1.output_channels
         # Output size, kernel size, stride, dilation, drop_out_prob
         layers = [(256,11,2,1,0.2),
                   (256,11,1,1,0.2), (256,11,1,1,0.2), (256,11,1,1,0.2),
@@ -68,10 +65,10 @@ class Wav2Letter(ConvCTCASR):
                   (768,25,1,1,0.3), (768,25,1,1,0.3), (768,25,1,1,0.3),
                   (896,29,1,2,0.4), (896,29,1,2,0.4), (896,29,1,2,0.4),
                   ]
-        layers = layers[: mid_layers+1] # + 1 for backwards compatability
+        layers = layers[: self.mid_layers+1] # + 1 for backwards compatability
         layers.append((1024,1,1,1,0.4)) # not inside the list for backwards compatability
+        layer_size = self.input_size
         conv_blocks = []
-        layer_size = input_size
         for idx in range(len(layers)):
             output_channels, kernel_size, stride, dilation, drop_out_prob = layers[idx]
             layer = Conv1dBlock(input_channels=layer_size,output_channels=output_channels,
