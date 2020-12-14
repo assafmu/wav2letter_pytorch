@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import pytorch_lightning as ptl
 import numpy as np
 
-
+ 
 class Conv1dBlock(nn.Module):
     def __init__(self,input_channels,output_channels,kernel_size,stride,drop_out_prob=-1.0,dilation=1,bn=True,activation_use=True):
         super(Conv1dBlock, self).__init__()
@@ -83,20 +83,25 @@ class Wav2Letter(ptl.LightningModule):
         last_layer = Conv1dBlock(input_channels=layer_size, output_channels=len(self.labels), kernel_size=(1,), stride=1,bn=False,activation_use=False)
         conv_blocks.append(('conv1d_{}'.format(len(layers)),last_layer))
         self.conv1ds = nn.Sequential(OrderedDict(conv_blocks))
-        strides = []
-        for module in self.conv1ds.children():
-            strides.append(module.conv1.stride[0])
-        self.scaling_factor = int(np.prod(strides))
-        self.criterion = nn.CTCLoss(blank=0,reduction='mean')
-
+        
+        self.criterion = nn.CTCLoss(blank=0, reduction='mean', zero_infinity=True)
+        print('LABELS:  '+str(self.labels))
+        self._scaling_factor = None
+    
+    @property
+    def scaling_factor(self):
+        if self._scaling_factor is None:
+            strides = []
+            for module in self.conv1ds.children():
+                strides.append(module.conv1.stride[0])
+            self._scaling_factor = int(np.prod(strides))
+        return self._scaling_factor
+            
 
     def forward(self, x, input_lengths=None):
         x = self.conv1ds(x)
         x = x.transpose(1,2)
-        if self.training:
-            x = F.log_softmax(x,dim=-1)
-        else:
-            x = F.softmax(x,dim=-1)
+        x = F.log_softmax(x,dim=-1)
         if input_lengths is not None:
             output_lengths = input_lengths // self.scaling_factor
         else:
@@ -109,12 +114,21 @@ class Wav2Letter(ptl.LightningModule):
     def training_step(self, batch, batch_idx):
         inputs, input_lengths, targets, target_lengths, file_paths, texts = batch
         out, output_lengths = self.forward(inputs,input_lengths)
-        return self.criterion(out.transpose(0,1),targets,output_lengths,target_lengths)
+        loss = self.criterion(out.transpose(0,1),targets,output_lengths,target_lengths)
+        self.log_dict({'train_loss':loss})
+        return loss
     
     def validation_step(self, batch, batch_idx):
         inputs, input_lengths, targets, target_lengths, file_paths, texts = batch
+        #print(len(texts[0]))
         out, output_lengths = self.forward(inputs,input_lengths)
-        return self.criterion(out.transpose(0,1),targets,output_lengths,target_lengths)
+        #print(targets)
+        #print(inputs.shape,input_lengths,targets,target_lengths,out.shape,output_lengths)
+        loss = self.criterion(out.transpose(0,1),targets,output_lengths,target_lengths)
+        greedy_outputs = out.argmax(dim=-1,keepdim=False)
+        
+        self.log_dict({'val_loss':loss})
+        return loss
 
 
 

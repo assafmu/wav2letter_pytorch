@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+ 
 import os
 import os.path
 import time
@@ -53,6 +53,7 @@ parser.add_argument('--optimizer',default='sgd',type=str,help='Optimizer to use.
 parser.add_argument('--mel-spec-count',default=0,type=int,help='How many channels to use in Mel Spectrogram')
 parser.add_argument('--use-mel-spec',dest='mel_spec_count',action='store_const',const=64,help='Use mel spectrogram with 64 filters')
 parser.add_argument('--augment',default='none',help='Choose augmentation to use. Can be either none (default), specaugment (SpecAugment) or speccutout (SpecCutout)')
+parser.add_argument('--default-root-dir', default='.',help='directory for tensorboard logs')
 
 def init_datasets(kwargs):
     labels = label_sets.labels_map[kwargs['labels']]
@@ -101,11 +102,14 @@ def get_data_loaders(labels,audio_conf,train_manifest,val_manifest,batch_size,me
     val_batch_loader = BatchAudioDataLoader(eval_dataset,batch_size=batch_size)
     return train_batch_loader, val_batch_loader
 
-if __name__ == '__main__':
+def main():
     arguments = parser.parse_args()
     audio_conf = {"window":"hamming","window_stride":0.01,"window_size":0.02,"sample_rate":16000}
-    train_loader, val_loader = get_data_loaders('english',audio_conf,arguments.train_manifest,arguments.val_manifest,4,64)
-    model = Wav2Letter(label_sets.labels_map['english'],audio_conf,mid_layers=1,input_size=64)
-    trainer = pytorch_lightning.Trainer()
+    train_loader, val_loader = get_data_loaders('english_lowercase',audio_conf,arguments.train_manifest,arguments.val_manifest,4,64)
+    model = Wav2Letter(label_sets.labels_map['english_lowercase'],audio_conf,mid_layers=1,input_size=64)
+    trainer = pytorch_lightning.Trainer(default_root_dir=arguments.default_root_dir) # override trainer.default_root_dir with "~/wav2letter_workdir" or something.
     trainer.fit(model,train_loader,val_loader)
     
+
+if __name__ == '__main__':
+    main()
