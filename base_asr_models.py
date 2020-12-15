@@ -44,14 +44,16 @@ class ConvCTCASR(ptl.LightningModule):
         
     #PyTorch Lightning methods
     def configure_optimizers(self):
-        return instantiate(self.cfg.optimizer, params=self.parameters()) # add scheduler instantiation. Return tuple of lists
+        optimizer = instantiate(self._cfg.optimizer, params=self.parameters())
+        scheduler = instantiate(self._cfg.scheduler,optimizer=optimizer)
+        return [optimizer],[scheduler]
         # return [instantiate(optim...)], [instantiate(scheduler...)]
     
     def training_step(self, batch, batch_idx):
         inputs, input_lengths, targets, target_lengths, file_paths, texts = batch
         out, output_lengths = self.forward(inputs,input_lengths)
         loss = self.criterion(out.transpose(0,1), targets, output_lengths, target_lengths)
-        logs = {'train_loss':loss}
+        logs = {'train_loss':loss,'learning_rate':self.optimizers().param_groups[0]['lr']}
         logs.update(self.add_string_metrics(out, output_lengths, texts, 'train'))
         self.log_dict(logs)
         return loss
