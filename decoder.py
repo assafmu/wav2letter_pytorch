@@ -134,13 +134,13 @@ class GreedyDecoder(Decoder):
         _, max_probs = torch.max(probs, 2)
         strings, offsets = self.convert_to_strings(max_probs.view(max_probs.size(0), max_probs.size(1)), sizes,
                                                    remove_repetitions=True, return_offsets=True)
-
+        strings = [s[0] for s in strings] #This feels a bit hacky.
         if probs.shape[0] == 1:
             strings = strings[0]
             offsets = offsets[0]
         if return_offsets:
-            return strings[0], offsets[0]
-        return strings[0]
+            return strings, offsets
+        return strings
     
 def prefix_beam_search(ctc, labels, blank_index=0, lm=None,k=5,alpha=0.3,beta=5,prune=0.001,end_char='>',return_weights=False):
     """

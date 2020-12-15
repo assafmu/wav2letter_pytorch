@@ -14,6 +14,7 @@ from hydra.utils import instantiate
 class ConvCTCASR(ptl.LightningModule):
     def __init__(self,cfg):
         super().__init__()
+        self._cfg = cfg
         self.audio_conf = cfg.audio_conf
         self.labels = cfg.labels
         self.ctc_decoder = instantiate(cfg.decoder)
@@ -36,13 +37,15 @@ class ConvCTCASR(ptl.LightningModule):
             cer_value += self.ctc_decoder.cer_ratio(expected, predicted)
             wer_value += self.ctc_decoder.wer_ratio(expected, predicted)
         cer_value /= len(texts) #batch size
+        wer_value /= len(texts)
         lengths_ratio = sum(map(len, decoded_texts)) / sum(map(len, texts))
         return {prefix+'_cer':cer_value, prefix+'_wer':wer_value, prefix+'_len_ratio':lengths_ratio}
         
         
     #PyTorch Lightning methods
     def configure_optimizers(self):
-        return torch.optim.SGD(self.parameters(),lr=1e-5,momentum=0.9,nesterov=True,weight_decay=1e-5)#Fill this out later
+        return instantiate(self.cfg.optimizer, params=self.parameters()) # add scheduler instantiation. Return tuple of lists
+        # return [instantiate(optim...)], [instantiate(scheduler...)]
     
     def training_step(self, batch, batch_idx):
         inputs, input_lengths, targets, target_lengths, file_paths, texts = batch

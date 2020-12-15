@@ -12,6 +12,12 @@ model:
     decoder:
         _target_: decoder.GreedyDecoder
         labels: ${model.labels}
+    optimizer:
+        _target_: torch.optim.SGD
+        lr: 1e-5
+        momentum: 0.9
+        nesterov: True
+        weight_decay: 1e-5
 trainer:
     default_root_dir: .
     max_epochs: 5
@@ -21,3 +27,6 @@ trainer:
 hydra:
     run:
         dir: ${trainer.default_root_dir}
+    job_logging:
+        root:
+            handlers: null
