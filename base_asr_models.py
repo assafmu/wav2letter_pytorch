@@ -29,6 +29,17 @@ class ConvCTCASR(ptl.LightningModule):
         raise NotImplementedError()
         #Should return output, output_lengths
         
+    def add_string_metrics(self, out, output_lengths, texts,prefix):
+        decoded_texts = self.ctc_decoder.decode(out, output_lengths)
+        wer_value, cer_value = 0,0
+        for expected, predicted in zip(texts, decoded_texts):
+            cer_value += self.ctc_decoder.cer_ratio(expected, predicted)
+            wer_value += self.ctc_decoder.wer_ratio(expected, predicted)
+        cer_value /= len(texts) #batch size
+        lengths_ratio = sum(map(len, decoded_texts)) / sum(map(len, texts))
+        return {prefix+'_cer':cer_value, prefix+'_wer':wer_value, prefix+'_len_ratio':lengths_ratio}
+        
+        
     #PyTorch Lightning methods
     def configure_optimizers(self):
         return torch.optim.SGD(self.parameters(),lr=1e-5,momentum=0.9,nesterov=True,weight_decay=1e-5)#Fill this out later
@@ -36,21 +47,17 @@ class ConvCTCASR(ptl.LightningModule):
     def training_step(self, batch, batch_idx):
         inputs, input_lengths, targets, target_lengths, file_paths, texts = batch
         out, output_lengths = self.forward(inputs,input_lengths)
-        loss = self.criterion(out.transpose(0,1),targets,output_lengths,target_lengths)
-        assert self.ctc_decoder is not None
-        self.log_dict({'train_loss':loss})
+        loss = self.criterion(out.transpose(0,1), targets, output_lengths, target_lengths)
+        logs = {'train_loss':loss}
+        logs.update(self.add_string_metrics(out, output_lengths, texts, 'train'))
+        self.log_dict(logs)
         return loss
     
     def validation_step(self, batch, batch_idx):
         inputs, input_lengths, targets, target_lengths, file_paths, texts = batch
-        #print(len(texts[0]))
         out, output_lengths = self.forward(inputs,input_lengths)
-        #print(targets)
-        #print(inputs.shape,input_lengths,targets,target_lengths,out.shape,output_lengths)
-        loss = self.criterion(out.transpose(0,1),targets,output_lengths,target_lengths)
-        if self.ctc_decoder is not None:
-            decoded_texts = self.ctc_decoder.decode(out,output_lengths) 
-            #print(decoded_texts[0])   #Example only, way too verbose.
-        
-        self.log_dict({'val_loss':loss})
+        loss = self.criterion(out.transpose(0,1), targets, output_lengths, target_lengths)
+        logs = {'val_loss':loss}
+        logs.update(self.add_string_metrics(out, output_lengths, texts, 'val'))
+        self.log_dict(logs)
         return loss
