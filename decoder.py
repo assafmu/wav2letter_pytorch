@@ -135,9 +135,9 @@ class GreedyDecoder(Decoder):
         strings, offsets = self.convert_to_strings(max_probs.view(max_probs.size(0), max_probs.size(1)), sizes,
                                                    remove_repetitions=True, return_offsets=True)
         strings = [s[0] for s in strings] #This feels a bit hacky.
-        if probs.shape[0] == 1:
-            strings = strings[0]
-            offsets = offsets[0]
+        #if probs.shape[0] == 1:
+        #    strings = strings[0]
+        #    offsets = offsets[0]
         if return_offsets:
             return strings, offsets
         return strings
@@ -298,3 +298,12 @@ def get_time_per_word(predictions, offsets, ratio=1.0):
     if current_word:
         word_times.append((current_word,start_time,end_time))
     return word_times
+
+
+if __name__ == '__main__':
+    my_decoder = GreedyDecoder(['_','a','b',' '])
+    a = my_decoder.decode( torch.Tensor([[[0.4,0.6,0,0]]]))
+    space = my_decoder.decode( torch.Tensor([[[0.4,0.1,0,0.5]]]))
+    aba_and_space = my_decoder.decode(torch.Tensor([[[0.0,0.6,0.3,0.1],[0.0,0.6,0.3,0.1],[0.0,0.3,0.6,0.1],[0.0,0.6,0.3,0.1]],
+                                          [[0.4,0.1,0,0.5],[0.4,0.1,0,0.5],[0.4,0.1,0,0.5],[0.4,0.1,0,0.5]]]),
+                            sizes=[4,1])

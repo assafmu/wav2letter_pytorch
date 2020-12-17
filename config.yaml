@@ -1,5 +1,8 @@
-train_manifest: ???
-val_manifest: ???
+data:
+    train_manifest: ???
+    val_manifest: ???
+    batch_size: 4
+    mel_spec: ${model.input_size}
 model:
     mid_layers: 1
     input_size: 64
@@ -14,13 +17,13 @@ model:
         labels: ${model.labels}
     optimizer:
         _target_: torch.optim.SGD
-        lr: 1e-5
+        lr: 1e-5 
         momentum: 0.9
         nesterov: True
         weight_decay: 1e-5
     scheduler:
         _target_: torch.optim.lr_scheduler.ExponentialLR
-        gamma: 0.99
+        gamma: 0.999
     #scheduler:
     #    _target_: torch.optim.lr_scheduler.OneCycleLR
     #    max_lr: ${model.optimizer.lr}

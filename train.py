@@ -62,22 +62,23 @@ def get_augmentor(kwargs):
     return augmentations.Identity()
 
     
-def get_data_loaders(labels,audio_conf,train_manifest,val_manifest,batch_size,mel_spec): 
+def get_data_loaders(labels,cfg,audio_conf): 
     #labels = label_sets.labels_map[labels]
-    train_dataset = SpectrogramDataset(train_manifest, audio_conf, labels,mel_spec=mel_spec)
-    train_batch_loader = BatchAudioDataLoader(train_dataset, batch_size=batch_size)
-    eval_dataset = SpectrogramDataset(val_manifest, audio_conf, labels,mel_spec=mel_spec)
-    val_batch_loader = BatchAudioDataLoader(eval_dataset,batch_size=batch_size)
+    train_dataset = SpectrogramDataset(cfg.train_manifest, audio_conf, labels,mel_spec=cfg.mel_spec)
+    print("Size of dataset: %d" %len(train_dataset))
+    train_batch_loader = BatchAudioDataLoader(train_dataset, batch_size=cfg.batch_size)
+    eval_dataset = SpectrogramDataset(cfg.val_manifest, audio_conf, labels,mel_spec=cfg.mel_spec)
+    val_batch_loader = BatchAudioDataLoader(eval_dataset,batch_size=cfg.batch_size)
     return train_batch_loader, val_batch_loader
 
 @hydra.main(config_name='config')
 def main(cfg: DictConfig):
     if type(cfg.model.labels) is str:
         cfg.model.labels = label_sets.labels_map[cfg.model.labels]
-    train_loader, val_loader = get_data_loaders(cfg.model.labels,cfg.model.audio_conf,cfg.train_manifest,cfg.val_manifest,4,64) #melspec, batch size, should be derived from config, and melspec should be interpolated
+    train_loader, val_loader = get_data_loaders(cfg.model.labels,cfg.data,cfg.model.audio_conf)
     model = Wav2Letter(cfg.model)
     trainer = pytorch_lightning.Trainer(**cfg.trainer)
-    trainer.fit(model,train_loader,val_loader)
+    trainer.fit(model, train_loader)
     
 
 if __name__ == '__main__':

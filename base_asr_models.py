@@ -19,7 +19,13 @@ class ConvCTCASR(ptl.LightningModule):
         self.labels = cfg.labels
         self.ctc_decoder = instantiate(cfg.decoder)
         self.criterion = nn.CTCLoss(blank=0, reduction='mean', zero_infinity=True)
+        self.example_input_array = self.create_example_input_array()
         print('LABELS:  '+str(self.labels))
+        
+    def create_example_input_array(self):
+        batch_size = 4
+        lengths = torch.randint(100,200,(4,))
+        return (torch.rand(4,self._cfg.input_size,200),lengths)
         
     @property 
     def scaling_factor(self):
@@ -47,7 +53,6 @@ class ConvCTCASR(ptl.LightningModule):
         optimizer = instantiate(self._cfg.optimizer, params=self.parameters())
         scheduler = instantiate(self._cfg.scheduler,optimizer=optimizer)
         return [optimizer],[scheduler]
-        # return [instantiate(optim...)], [instantiate(scheduler...)]
     
     def training_step(self, batch, batch_idx):
         inputs, input_lengths, targets, target_lengths, file_paths, texts = batch
