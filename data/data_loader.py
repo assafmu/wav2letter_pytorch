@@ -94,7 +94,7 @@ class SpectrogramDataset(Dataset):
         '''
         Create a dataset for ASR. Audio conf and labels can be re-used from the model.
         Arguments:
-            manifest_filepath (string): path to the manifest. Can be a csv containing either path-text pairs, or a pandas DataFrame with columns "filepath" and "text"
+            manifest_filepath (string): path to the manifest. Each line must be a json containing fields "filepath" and "text". 
             audio_conf (dict): dict containing sample rate, and window size stride and type. 
             labels (list): list containing all valid labels in the text.
             mel_spec(int or None): if not None, use mel spectrogram with that many channels.
@@ -102,10 +102,6 @@ class SpectrogramDataset(Dataset):
         '''
         super(SpectrogramDataset, self).__init__()
         prefix_df = pd.read_csv(manifest_filepath,index_col=0,nrows=2)
-        #if not {'filepath','text'}.issubset(prefix_df.columns):
-        #    self.df = pd.read_csv(manifest_filepath,header=None,names=['filepath','text'])
-        #else:
-        #    self.df = pd.read_csv(manifest_filepath,index_col=0)
         with open(manifest_filepath) as f:
             lines = f.readlines()
         self.df = pd.DataFrame(map(json.loads,lines))
@@ -119,17 +115,6 @@ class SpectrogramDataset(Dataset):
         self.labels_map = dict([(labels[i],i) for i in range(len(labels))])
         self.validate_sample_rate()
         self.extractor = SpectrogramExtractor(audio_conf,mel_spec,use_cuda)
-        self.preprocess_spectrograms()
-        
-    
-    def preprocess_spectrograms(self):
-        self.spects = {}
-        for i in range(self.size):
-            audio_path = self.df.audio_filepath.iloc[i]
-            spect = self.parse_audio(audio_path)
-            self.spects[i] = spect
-            if self.size > 100 and i % (self.size // 20) == 0:
-                print("Processed %d out of %d spects" % (i, self.size))
         
     def __getitem__(self, index):
         sample = self.df.iloc[index]
@@ -137,7 +122,7 @@ class SpectrogramDataset(Dataset):
         if 'א' in self.labels_map: #Hebrew!
             import data.language_specific_tools
             transcript = data.language_specific_tools.hebrew_final_to_normal(transcript)
-        spect = self.spects[index]
+        spect = self.parse_audio(audio_path)
         target = list(filter(None,[self.labels_map.get(x) for x in list(transcript)]))
         return spect, target, audio_path, transcript
 

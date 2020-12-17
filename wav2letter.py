@@ -64,9 +64,9 @@ class Wav2Letter(ConvCTCASR):
                   (640,21,1,1,0.3), (640,21,1,1,0.3), (640,21,1,1,0.3),
                   (768,25,1,1,0.3), (768,25,1,1,0.3), (768,25,1,1,0.3),
                   (896,29,1,2,0.4), (896,29,1,2,0.4), (896,29,1,2,0.4),
+                  (1024,1,1,1,0.4)
                   ]
-        layers = layers[: self.mid_layers+1] # + 1 for backwards compatability
-        layers.append((1024,1,1,1,0.4)) # not inside the list for backwards compatability
+        layers = layers[: self.mid_layers]
         layer_size = self.input_size
         conv_blocks = []
         for idx in range(len(layers)):

@@ -3,6 +3,7 @@ data:
     val_manifest: ???
     batch_size: 4
     mel_spec: ${model.input_size}
+    audio_conf: ${model.audio_conf}
 model:
     mid_layers: 1
     input_size: 64
