@@ -2,17 +2,16 @@
 
 from __future__ import division
 
-import os
-import subprocess
 import json
+import math
 
 import librosa
 import numpy as np
 import scipy.signal
 from scipy.io import wavfile
 import torch
+import torch.nn
 from torch.utils.data import Dataset,DataLoader
-import torch.nn.functional as F
 import pandas as pd
 
 windows = {'hamming': scipy.signal.hamming, 'hann': scipy.signal.hann, 'blackman': scipy.signal.blackman,'bartlett':scipy.signal.bartlett}
@@ -89,6 +88,61 @@ class SpectrogramExtractor(object):
         return spect
 
 
+class NewSpectrogramExtractor(torch.nn.Module):
+    def __init__(self, audio_conf, mel_spec=64,use_cuda=False):
+        super().__init__()
+        window_size_samples = int(audio_conf.sample_rate * audio_conf.window_size)
+        window_stride_samples = int(audio_conf.sample_rate * audio_conf.window_stride)
+        self.n_fft = 2 ** math.ceil(math.log2(window_size_samples))
+        print(self.n_fft)
+        filterbanks = torch.tensor(
+            librosa.filters.mel(audio_conf.sample_rate,
+                                n_fft=self.n_fft,
+                                n_mels=mel_spec, fmin=0, fmax=audio_conf.sample_rate / 2),
+                                dtype=torch.float
+        ).unsqueeze(0)
+        self.register_buffer("fb", filterbanks)
+        torch_windows = {
+                'hann': torch.hann_window,
+                'hamming': torch.hamming_window,
+                'blackman': torch.blackman_window,
+                'bartlett': torch.bartlett_window,
+                'none': None,
+            }
+        window_fn = torch_windows.get(audio_conf.window, None)
+        window_tensor = window_fn(window_size_samples, periodic=False) if window_fn else None
+        self.register_buffer("window", window_tensor)
+        self.stft = lambda x: torch.stft(
+            x,
+            n_fft=self.n_fft,
+            hop_length=window_stride_samples,
+            win_length=window_size_samples,
+            center=True,
+            window=self.window.to(dtype=torch.float),
+            return_complex=False,
+        )
+    def _get_spect(self,audio):
+        # TODO: add dithering, pre-emphasis
+        x = self.stft(torch.Tensor(audio,device=self.fb.device))
+        x = torch.sqrt(x.pow(2).sum(-1))
+        x = x.pow(2)
+        x = torch.matmul(self.fb.to(x.dtype), x)
+        return x
+
+        
+    def extract(self,signal):
+        epsilon = 1e-5
+        log_zero_guard_value=2 ** -24
+        spect = self._get_spect(signal)
+        spect = np.log1p(spect + log_zero_guard_value)
+        # normlize across time
+        mean = spect.mean(axis=2)
+        std = spect.std(axis=2)
+        std += epsilon
+        spect = spect - mean.reshape(1, -1, 1)
+        spect = spect / std.reshape(1, -1, 1)
+        return spect.squeeze()
+
 class SpectrogramDataset(Dataset):
     def __init__(self, manifest_filepath, audio_conf, labels, mel_spec=None, use_cuda=False):
         '''
@@ -115,13 +169,11 @@ class SpectrogramDataset(Dataset):
         self.labels_map = dict([(labels[i],i) for i in range(len(labels))])
         self.validate_sample_rate()
         self.extractor = SpectrogramExtractor(audio_conf,mel_spec,use_cuda)
+        self.extractor = NewSpectrogramExtractor(audio_conf,mel_spec,use_cuda)
         
     def __getitem__(self, index):
         sample = self.df.iloc[index]
         audio_path, transcript = sample.audio_filepath, sample.text
-        if 'א' in self.labels_map: #Hebrew!
-            import data.language_specific_tools
-            transcript = data.language_specific_tools.hebrew_final_to_normal(transcript)
         spect = self.parse_audio(audio_path)
         target = list(filter(None,[self.labels_map.get(x) for x in list(transcript)]))
         return spect, target, audio_path, transcript

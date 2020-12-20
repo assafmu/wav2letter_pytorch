@@ -3,7 +3,7 @@
 import os
 import pytorch_lightning
 import hydra
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from data import label_sets
 from wav2letter import Wav2Letter
@@ -19,7 +19,7 @@ def get_data_loaders(labels, cfg):
     val_batch_loader = BatchAudioDataLoader(eval_dataset,batch_size=cfg.batch_size)
     return train_batch_loader, val_batch_loader
 
-@hydra.main(config_name='config')
+@hydra.main(config_path='configuration', config_name='config')
 def main(cfg: DictConfig):
     if type(cfg.model.labels) is str:
         cfg.model.labels = label_sets.labels_map[cfg.model.labels]

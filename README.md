@@ -29,9 +29,7 @@ pip install -r requirements.txt
 ```
 ## Windows installation
 
-As of March 24, 2020, the repo runs correctly on a Windows 10 machine. We expect to keep Windows support for the forseeable future.
-
-However, Windows is recommended only for spot checks - for actual training, use Linux.
+As of December 20, 2020, Windows is supported but recommended only for spot checks - for actual training, use Linux.
 
 We recommend installing PyTorch with an Anaconda installation, and Microsoft Visual C++ Build Tools for kenlm and python-levenshtein.
 

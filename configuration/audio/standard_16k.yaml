@@ -1,0 +1,6 @@
+# @package model 
+audio_conf:
+    window: hamming
+    window_stride: 0.01
+    window_size: 0.02
+    sample_rate: 16000
