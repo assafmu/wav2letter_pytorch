@@ -94,7 +94,6 @@ class NewSpectrogramExtractor(torch.nn.Module):
         window_size_samples = int(audio_conf.sample_rate * audio_conf.window_size)
         window_stride_samples = int(audio_conf.sample_rate * audio_conf.window_stride)
         self.n_fft = 2 ** math.ceil(math.log2(window_size_samples))
-        print(self.n_fft)
         filterbanks = torch.tensor(
             librosa.filters.mel(audio_conf.sample_rate,
                                 n_fft=self.n_fft,

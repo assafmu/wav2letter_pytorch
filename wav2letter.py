@@ -56,25 +56,15 @@ class Wav2Letter(ConvCTCASR):
         else:
             self.input_size = cfg.input_size
 
-        # Output size, kernel size, stride, dilation, drop_out_prob
-        layers = [(256,11,2,1,0.2),
-                  (256,11,1,1,0.2), (256,11,1,1,0.2), (256,11,1,1,0.2),
-                  (384,13,1,1,0.2), (384,13,1,1,0.2), (384,13,1,1,0.2),
-                  (512,17,1,1,0.2), (512,17,1,1,0.2), (512,17,1,1,0.2),
-                  (640,21,1,1,0.3), (640,21,1,1,0.3), (640,21,1,1,0.3),
-                  (768,25,1,1,0.3), (768,25,1,1,0.3), (768,25,1,1,0.3),
-                  (896,29,1,2,0.4), (896,29,1,2,0.4), (896,29,1,2,0.4),
-                  (1024,1,1,1,0.4)
-                  ]
-        layers = layers[: self.mid_layers]
+        layers = cfg.layers[: self.mid_layers]
         layer_size = self.input_size
         conv_blocks = []
         for idx in range(len(layers)):
-            output_channels, kernel_size, stride, dilation, drop_out_prob = layers[idx]
-            layer = Conv1dBlock(input_channels=layer_size,output_channels=output_channels,
-                                kernel_size=(kernel_size,),stride=stride,
-                                dilation=dilation,drop_out_prob=drop_out_prob)
-            layer_size=output_channels
+            layer_params = layers[idx] # TODO: can we use **layer_params here?
+            layer = Conv1dBlock(input_channels=layer_size,output_channels=layer_params.output_size,
+                                kernel_size=(layer_params.kernel_size,),stride=layer_params.stride,
+                                dilation=layer_params.dilation,drop_out_prob=layer_params.dropout)
+            layer_size = layer_params.output_size
             conv_blocks.append(('conv1d_{}'.format(idx),layer))
         last_layer = Conv1dBlock(input_channels=layer_size, output_channels=len(self.labels), kernel_size=(1,), stride=1,bn=False,activation_use=False)
         conv_blocks.append(('conv1d_{}'.format(len(layers)),last_layer))

@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
  
 import os
+import sys
+
 import pytorch_lightning
 import hydra
 from omegaconf import DictConfig, OmegaConf
@@ -13,7 +15,6 @@ from data.data_loader import SpectrogramDataset, BatchAudioDataLoader
     
 def get_data_loaders(labels, cfg):
     train_dataset = SpectrogramDataset(cfg.train_manifest, cfg.audio_conf, labels,mel_spec=cfg.mel_spec)
-    print("Size of dataset: %d" %len(train_dataset))
     train_batch_loader = BatchAudioDataLoader(train_dataset, batch_size=cfg.batch_size)
     eval_dataset = SpectrogramDataset(cfg.val_manifest, cfg.audio_conf, labels,mel_spec=cfg.mel_spec)
     val_batch_loader = BatchAudioDataLoader(eval_dataset,batch_size=cfg.batch_size)
@@ -26,6 +27,12 @@ def main(cfg: DictConfig):
     train_loader, val_loader = get_data_loaders(cfg.model.labels,cfg.data)
     model = Wav2Letter(cfg.model)
     trainer = pytorch_lightning.Trainer(**cfg.trainer)
+    
+    logdir = trainer.logger.experiment.log_dir
+    OmegaConf.save(cfg, logdir + '/full_config.yaml')
+    with open(logdir + '/cmd-args.log','w') as f:
+        f.write(' '.join(sys.argv))
+
     trainer.fit(model, train_loader)
     
 

@@ -10,6 +10,107 @@ data:
 model:
     mid_layers: 1
     input_size: 64
+    layers:
+     - output_size: 256
+       kernel_size: 11
+       stride: 2
+       dilation: 1
+       dropout: 0.2
+     - output_size: 256
+       kernel_size: 11
+       stride: 1
+       dilation: 1
+       dropout: 0.2
+     - output_size: 256
+       kernel_size: 11
+       stride: 1
+       dilation: 1
+       dropout: 0.2
+     - output_size: 256
+       kernel_size: 11
+       stride: 1
+       dilation: 1
+       dropout: 0.2
+     - output_size: 384
+       kernel_size: 13
+       stride: 1
+       dilation: 1
+       dropout: 0.2
+     - output_size: 384
+       kernel_size: 13
+       stride: 1
+       dilation: 1
+       dropout: 0.2
+     - output_size: 384
+       kernel_size: 13
+       stride: 1
+       dilation: 1
+       dropout: 0.2
+     - output_size: 512
+       kernel_size: 17
+       stride: 1
+       dilation: 1
+       dropout: 0.2
+     - output_size: 512
+       kernel_size: 17
+       stride: 1
+       dilation: 1
+       dropout: 0.2
+     - output_size: 512
+       kernel_size: 17
+       stride: 1
+       dilation: 1
+       dropout: 0.2
+     - output_size: 640
+       kernel_size: 21
+       stride: 1
+       dilation: 1
+       dropout: 0.3
+     - output_size: 640
+       kernel_size: 21
+       stride: 1
+       dilation: 1
+       dropout: 0.3
+     - output_size: 640
+       kernel_size: 21
+       stride: 1
+       dilation: 1
+       dropout: 0.3
+     - output_size: 768
+       kernel_size: 25
+       stride: 1
+       dilation: 1
+       dropout: 0.3
+     - output_size: 768
+       kernel_size: 25
+       stride: 1
+       dilation: 1
+       dropout: 0.3
+     - output_size: 768
+       kernel_size: 25
+       stride: 1
+       dilation: 1
+       dropout: 0.3
+     - output_size: 896
+       kernel_size: 29
+       stride: 1
+       dilation: 2
+       dropout: 0.4
+     - output_size: 896
+       kernel_size: 29
+       stride: 1
+       dilation: 2
+       dropout: 0.4
+     - output_size: 896
+       kernel_size: 29
+       stride: 1
+       dilation: 2
+       dropout: 0.4
+     - output_size: 1024
+       kernel_size: 1
+       stride: 1
+       dilation: 1
+       dropout: 0.4 
     audio_conf:
         window: hamming
         window_stride: 0.01

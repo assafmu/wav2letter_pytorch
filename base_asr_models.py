@@ -20,7 +20,6 @@ class ConvCTCASR(ptl.LightningModule):
         self.ctc_decoder = instantiate(cfg.decoder)
         self.criterion = nn.CTCLoss(blank=0, reduction='mean', zero_infinity=True)
         self.example_input_array = self.create_example_input_array()
-        print('LABELS:  '+str(self.labels))
         
     def create_example_input_array(self):
         batch_size = 4
