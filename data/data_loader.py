@@ -16,7 +16,7 @@ import pandas as pd
 
 windows = {'hamming': scipy.signal.hamming, 'hann': scipy.signal.hann, 'blackman': scipy.signal.blackman,'bartlett':scipy.signal.bartlett}
 
-def load_audio(path):
+def load_audio(path,duration=-1,offset=0):
     sr, sound = wavfile.read(path)
     sound = sound.astype('float32') / (2**15 -1)
     if len(sound.shape) > 1:
@@ -24,6 +24,8 @@ def load_audio(path):
             sound = sound.squeeze()
         else:
             sound = sound.mean(axis=1)
+    if duration > 0:
+        sound = sound[int(offset*sr):(int((offset+duration) * sr))]
     return sound
 
 class SpectrogramExtractor(object):
@@ -158,6 +160,8 @@ class SpectrogramDataset(Dataset):
         with open(manifest_filepath) as f:
             lines = f.readlines()
         self.df = pd.DataFrame(map(json.loads,lines))
+        if not 'offset' in self.df.columns:
+            self.df['offset'] = 0
         self.size = len(self.df)
         self.window_stride = audio_conf['window_stride']
         self.window_size = audio_conf['window_size']
@@ -173,12 +177,12 @@ class SpectrogramDataset(Dataset):
     def __getitem__(self, index):
         sample = self.df.iloc[index]
         audio_path, transcript = sample.audio_filepath, sample.text
-        spect = self.parse_audio(audio_path)
+        spect = self.parse_audio(audio_path, sample.duration, sample.offset)
         target = list(filter(None,[self.labels_map.get(x) for x in list(transcript)]))
         return spect, target, audio_path, transcript
 
-    def parse_audio(self,audio_path):
-        y = load_audio(audio_path)
+    def parse_audio(self,audio_path, duration, offset):
+        y = load_audio(audio_path, duration, offset)
         spect = self.extractor.extract(y)
         return spect
     

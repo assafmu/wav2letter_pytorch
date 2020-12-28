@@ -47,16 +47,20 @@ class ConvCTCASR(ptl.LightningModule):
         raise NotImplementedError()
         # returns output, output_lengths
         
-    def add_string_metrics(self, out, output_lengths, texts,prefix):
+    def add_string_metrics(self, out, output_lengths, texts, prefix):
         decoded_texts = self.ctc_decoder.decode(out, output_lengths)
-        wer_value, cer_value = 0,0
+        wer_sum, cer_sum,wer_denom_sum,cer_denom_sum = 0,0,0,0
         for expected, predicted in zip(texts, decoded_texts):
-            cer_value += self.ctc_decoder.cer_ratio(expected, predicted)
-            wer_value += self.ctc_decoder.wer_ratio(expected, predicted)
-        cer_value /= len(texts) #batch size
-        wer_value /= len(texts)
+            cer_value, cer_denom = self.ctc_decoder.cer_ratio(expected, predicted)
+            wer_value, wer_denom = self.ctc_decoder.wer_ratio(expected, predicted)
+            cer_sum+= cer_value
+            cer_denom_sum+=cer_denom
+            wer_sum+= wer_value
+            wer_denom_sum+=wer_denom
+        cer = cer_sum / cer_denom_sum
+        wer = wer_sum / wer_denom_sum
         lengths_ratio = sum(map(len, decoded_texts)) / sum(map(len, texts))
-        return {prefix+'_cer':cer_value, prefix+'_wer':wer_value, prefix+'_len_ratio':lengths_ratio}
+        return {prefix+'_cer':cer, prefix+'_wer':wer, prefix+'_len_ratio':lengths_ratio}
         
         
     #PyTorch Lightning methods

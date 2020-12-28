@@ -2,8 +2,6 @@
  
 import os
 import sys
-import warnings
-warnings.filterwarnings('ignore')
 
 import pytorch_lightning
 import hydra
@@ -36,9 +34,9 @@ def main(cfg: DictConfig):
     trainer = pytorch_lightning.Trainer(**cfg.trainer)
     
     logdir = trainer.logger.experiment.log_dir
-    OmegaConf.save(cfg, logdir + '/full_config.yaml')
-    with open(logdir + '/cmd-args.log','w') as f:
-        f.write(' '.join(sys.argv))
+    #OmegaConf.save(cfg, logdir + '/full_config.yaml')
+    #with open(logdir + '/cmd-args.log','w') as f:
+    #    f.write(' '.join(sys.argv))
 
     trainer.fit(model, train_loader)
     
