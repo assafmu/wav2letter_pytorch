@@ -5,7 +5,7 @@ english_labels = ["'",'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
 english_lowercase_labels = [s.lower() for s in english_labels]
 
 hebrew_labels = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט', 'י', 'כ', 'ל',
- 'מ', 'נ', 'ס', 'ע', 'פ', 'צ', 'ק', 'ר', 'ש', 'ת']
+ 'מ', 'נ', 'ס', 'ע', 'פ', 'צ', 'ק', 'ר', 'ש', 'ת', 'ן', 'ף', 'ץ', 'ם', 'ך']
 
 labels_map = {'english':english_labels,'hebrew':hebrew_labels,'english_lowercase':english_lowercase_labels}
 for lang in labels_map:

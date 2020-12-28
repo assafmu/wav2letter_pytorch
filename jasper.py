@@ -16,6 +16,9 @@ from torch import Tensor
 import torch.nn.functional as F
 import numpy as np
 import pickle
+
+from base_asr_models import ConvCTCASR 
+
 jasper_activations = {
     "hardtanh": nn.Hardtanh,
     "relu": nn.ReLU,
@@ -416,53 +419,52 @@ class JasperBlock(nn.Module):
         return out, lens
     
     
-class Jasper(nn.Module):
-    def __init__(self,labels='abc',audio_conf=None,mid_layers=1,input_size=None):
-        super(Jasper,self).__init__()
-        self.labels=labels
-        self.audio_conf = audio_conf # For consistency with other models
-        self.mid_layers = mid_layers
-        if not input_size:
+class Jasper(ConvCTCASR):
+    def __init__(self,cfg):
+        super(Jasper,self).__init__(cfg)
+        self.mid_layers = cfg.mid_layers
+        if not cfg.input_size:
             nfft = (self.audio_conf['sample_rate'] * self.audio_conf['window_size'])
-            input_size = int(1+(nfft/2))
-        self.input_size = input_size
-        # self.input_batch_norm = nn.BatchNorm1d(out_channels, eps=1e-3, momentum=0.1)
-        #Jasper blocks created by "JasperEncoder"
-        #Bad code, but replicates QuartzNet layout. Need to refactor, a lot.
-        blocks = [
-                JasperBlock(input_size,256,kernel_size=32,stride=2,dilation=1,residual=False,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
-                JasperBlock(256,256,kernel_size=32,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
-                JasperBlock(256,256,kernel_size=32,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
-                JasperBlock(256,256,kernel_size=32,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
-                JasperBlock(256,256,kernel_size=38,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
-                JasperBlock(256,256,kernel_size=38,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
-                JasperBlock(256,256,kernel_size=38,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
-                JasperBlock(256,512,kernel_size=50,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
-                JasperBlock(512,512,kernel_size=50,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
-                JasperBlock(512,512,kernel_size=50,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
-                JasperBlock(512,512,kernel_size=62,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
-                JasperBlock(512,512,kernel_size=62,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
-                JasperBlock(512,512,kernel_size=62,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
-                JasperBlock(512,512,kernel_size=74,stride=1,dilation=1,residual=True,repeat=1,conv_mask=True,separable=True,activation=torch.nn.ReLU(),dropout=0),
-                JasperBlock(512,1024,kernel_size=1,stride=1,dilation=1,residual=False,repeat=1,conv_mask=True,activation=torch.nn.ReLU(),dropout=0)
-                
-                ]
-        #self.almost_all_jasper = nn.Sequential(*[zero_block,blocks_123,blocks_456,blocks_7,blocks_89,blocks_101112,blocks_13,blocks_14][:mid_layers])
-        self.jasper_encoder = nn.Sequential(*blocks[:mid_layers])
-        #Last layer, created by JasperDecoder
+            self.input_size = int(1+(nfft/2))
+        else:
+            self.input_size = cfg.input_size
+        self._build_encoder(cfg)
         last_layer_input_size = self.jasper_encoder[-1].mconv[-1].num_features
-        self.final_layer = nn.Sequential(nn.Conv1d(last_layer_input_size,len(labels),kernel_size=1,stride=1)) #Our labels already include blank
-        self.jasper_encoder.apply(init_weights)
+        self.final_layer = nn.Sequential(nn.Conv1d(last_layer_input_size,len(self.labels),kernel_size=1,stride=1))
         self.final_layer.apply(init_weights)
-
-        self.scaling_factor = int(np.prod([block.mconv[0].conv.stride[0] for block in blocks[:mid_layers]]))
         
+    def _build_encoder(self,cfg):
+        layer_size = self.input_size
+        encoder_layers = []
+        for l in cfg.jasper_blocks[:cfg.mid_layers]:
+            layer = JasperBlock(inplanes = layer_size, planes = l.layer_size,
+                            kernel_size = l.kernel_size,
+                            stride = l.get('stride',1),
+                            dilation = l.get('dilation',1), 
+                            residual = l.residual,
+                            repeat = l.get('repeat',1),
+                            conv_mask = l.get('conv_mask',True),
+                            separable = l.get('separable',True),
+                            activation = torch.nn.ReLU(),
+                            dropout = l.get('dropout',0))
+            encoder_layers.append(layer)
+            layer_size = l.layer_size
+        self.jasper_encoder = nn.Sequential(*encoder_layers)
+        self.jasper_encoder.apply(init_weights)
+    
+    @property
+    def scaling_factor(self):
+        if not hasattr(self, '_scaling_factor'):
+            self._scaling_factor = int(np.prod([block.mconv[0].conv.stride[0] for block in self.jasper_encoder]))
+        return self._scaling_factor
+
+            
     def forward(self,xs,input_lengths):
         '''
         [Batches X channels X length], lengths
         '''
-        encoder_res = self.jasper_encoder((xs,torch.IntTensor(input_lengths)))
-        outout_lengths = encoder_res[1]
+        encoder_res = self.jasper_encoder((xs,input_lengths))
+        output_lengths = encoder_res[1].to(dtype=int)
         jasper_res = self.final_layer(encoder_res[0])
         jasper_res = jasper_res.transpose(2,1) # For consistency with other models.
         if self.training:
@@ -470,28 +472,6 @@ class Jasper(nn.Module):
         else:
             jasper_res = F.softmax(jasper_res,dim=-1)
         assert not (jasper_res != jasper_res).any()  # is there any NAN in result?
-        return jasper_res, outout_lengths # [Batches X Labels X Time (padded to max)], [Batches]
-
-    @classmethod
-    def load_model(cls,path):
-        package = torch.load(path,map_location = lambda storage, loc: storage)
-        return cls.load_model_package(package)
-    
-    @classmethod
-    def load_model_package(cls,package):
-        model = cls(labels=package['labels'],audio_conf=package['audio_conf'],mid_layers=package['layers'],input_size=package.get('input_size'))
-        model.load_state_dict(package['state_dict'])
-        return model
-
-    @staticmethod
-    def serialize(model):
-        package = {
-                'audio_conf':model.audio_conf,
-                'labels':model.labels,
-                'layers':model.mid_layers,
-                'state_dict':model.state_dict(),
-                'input_size':model.input_size
-                }
-        return package
+        return jasper_res, output_lengths # [Batches X Labels X Time (padded to max)], [Batches]
 
     

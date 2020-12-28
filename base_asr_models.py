@@ -23,17 +23,29 @@ class ConvCTCASR(ptl.LightningModule):
         
     def create_example_input_array(self):
         batch_size = 4
-        lengths = torch.randint(100,200,(4,))
-        return (torch.rand(4,self._cfg.input_size,200),lengths)
+        min_length,max_length = 100,200
+        lengths = torch.randint(min_length,max_length,(4,))
+        return (torch.rand(batch_size,self._cfg.input_size,max_length),lengths)
         
+    def compute_output_lengths(self,input_lengths):
+        '''
+        Compute the output lengths given the input lengths.
+        Override if ratio is not strictly proportional (can happen with unpadded convolutions)
+        '''
+        output_lengths = input_lengths // self.scaling_factor
+        return output_lengths
+    
     @property 
     def scaling_factor(self):
+        '''
+        Returns a ratio between input lengths and output lengths.
+        In convolutional models, depends on kernel size, padding, stride, and dilation.
+        '''
         raise NotImplementedError()
-        #Should return integer ratio between input length and output length.
         
     def forward(inputs,input_lengths):
         raise NotImplementedError()
-        #Should return output, output_lengths
+        # returns output, output_lengths
         
     def add_string_metrics(self, out, output_lengths, texts,prefix):
         decoded_texts = self.ctc_decoder.decode(out, output_lengths)

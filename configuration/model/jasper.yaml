@@ -1,0 +1,79 @@
+# @package model
+name: jasper
+mid_layers: 1
+jasper_blocks:
+ - layer_size: 256
+   kernel_size: 32
+   stride: 2
+   residual: False
+   separable: True
+ - layer_size: 256
+   kernel_size: 32
+   stride: 1
+   residual: True
+   separable: True
+ - layer_size: 256
+   kernel_size: 32
+   stride: 1
+   residual: True
+   separable: True
+ - layer_size: 256
+   kernel_size: 32
+   stride: 1
+   residual: True
+   separable: True
+ - layer_size: 256
+   kernel_size: 38
+   stride: 1
+   residual: True
+   separable: True
+ - layer_size: 256
+   kernel_size: 38
+   stride: 1
+   residual: True
+   separable: True
+ - layer_size: 256
+   kernel_size: 38
+   stride: 1
+   residual: True
+   separable: True
+ - layer_size: 512
+   kernel_size: 50
+   stride: 1
+   residual: True
+   separable: True
+ - layer_size: 512
+   kernel_size: 50
+   stride: 1
+   residual: True
+   separable: True
+ - layer_size: 512
+   kernel_size: 50
+   stride: 1
+   residual: True
+   separable: True
+ - layer_size: 512
+   kernel_size: 62
+   stride: 1
+   residual: True
+   separable: True
+ - layer_size: 512
+   kernel_size: 62
+   stride: 1
+   residual: True
+   separable: True
+ - layer_size: 512
+   kernel_size: 62
+   stride: 1
+   residual: True
+   separable: True
+ - layer_size: 512
+   kernel_size: 74
+   stride: 1
+   residual: True
+   separable: True
+ - layer_size: 1024
+   kernel_size: 1
+   stride: 1
+   residual: False
+   separable: False

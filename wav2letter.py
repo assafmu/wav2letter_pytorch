@@ -47,7 +47,7 @@ class Conv1dBlock(nn.Module):
         return output
 
 class Wav2Letter(ConvCTCASR):
-    def __init__(self,cfg):
+    def __init__(self, cfg):
         super(Wav2Letter,self).__init__(cfg)
         self.mid_layers = cfg.mid_layers
         if not cfg.input_size:
@@ -86,7 +86,7 @@ class Wav2Letter(ConvCTCASR):
         x = x.transpose(1,2)
         x = F.log_softmax(x,dim=-1)
         if input_lengths is not None:
-            output_lengths = input_lengths // self.scaling_factor
+            output_lengths = self.compute_output_lengths(input_lengths)
         else:
             output_lengths = None
         return x, output_lengths
