@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-import kenlm
-import librosa
 import torch
 import pytest
 import numpy as np
@@ -25,7 +23,7 @@ def test_sanity():
 def test_inconsistent_sizes():
     sample = np.zeros((10,len(english_labels) - 1))
     with pytest.raises(AssertionError) as exc_info:
-        res = prefix_beam_search(sample,english_labels)
+        _ = prefix_beam_search(sample,english_labels)
     assert exc_info is not None
     
     
@@ -38,8 +36,10 @@ def test_beam_is_not_greedy():
     samples = np.array([[0.8,0.2,0,0],[0.6,0.4,0,0]])
     res = prefix_beam_search(samples,labels,blank_index=0,return_weights=True)
     assert res == ('A',0.52)
-    greedy_res = greedy_decode(samples,labels)
-    assert greedy_res == ''
+    
+    greedy_decoder = GreedyDecoder(labels, blank_index=0)
+    greedy_res = greedy_decoder.decode(torch.FloatTensor(samples).unsqueeze(0), sizes=None)
+    assert greedy_res == ['']
     
 def test_beam_width_changes():
     def the_lm(s):
@@ -57,7 +57,6 @@ def test_beam_width_changes():
     
     assert res == ' '
     assert res2 == 'A '
-    
 
 def test_class_wrapper():
     
@@ -69,3 +68,14 @@ def test_class_wrapper():
     decoder = PrefixBeamSearchLMDecoder('',english_labels)
     res = decoder.decode(sample)
     assert res == 'ASR'
+    
+def test_pbs_batch_dimensions():
+    sample = torch.zeros((10,len(english_labels)))
+    sample[0,2] = 0.5
+    sample[1,20]=0.5
+    sample[2,19]=0.5
+    sample[3:,0]=0.5
+    sample = sample.unsqueeze(0)
+    decoder = PrefixBeamSearchLMDecoder('',english_labels)
+    res = decoder.decode(sample,english_labels)
+    assert res == ['ASR']
