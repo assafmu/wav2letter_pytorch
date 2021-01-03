@@ -122,12 +122,15 @@ class NewSpectrogramExtractor(torch.nn.Module):
             window=self.window.to(dtype=torch.float),
             return_complex=False,
         )
-    def _get_spect(self,audio):
-        # TODO: add dithering, pre-emphasis
-        x = self.stft(torch.Tensor(audio,device=self.fb.device))
-        x = torch.sqrt(x.pow(2).sum(-1))
-        x = x.pow(2)
-        x = torch.matmul(self.fb.to(x.dtype), x)
+    def _get_spect(self, audio):
+        dithering = 1e-5
+        preemph = 0.97
+        x = torch.Tensor(audio) + torch.randn(audio.shape) * dithering # dithering
+        x = torch.cat((x[0].unsqueeze(0), x[1:] - preemph * x[:-1]), dim=0) # preemphasi
+        x = self.stft(x.to(device=self.fb.device))
+        x = torch.sqrt(x.pow(2).sum(-1)) # get magnitudes
+        x = x.pow(2) # power magnitude
+        x = torch.matmul(self.fb.to(x.dtype), x) #apply filterbanks
         return x
 
         
@@ -135,8 +138,8 @@ class NewSpectrogramExtractor(torch.nn.Module):
         epsilon = 1e-5
         log_zero_guard_value=2 ** -24
         spect = self._get_spect(signal)
-        spect = np.log1p(spect + log_zero_guard_value)
-        # normlize across time
+        spect = np.log1p(spect + log_zero_guard_value) 
+        # normlize across time, per feature
         mean = spect.mean(axis=2)
         std = spect.std(axis=2)
         std += epsilon
