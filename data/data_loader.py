@@ -28,69 +28,7 @@ def load_audio(path,duration=-1,offset=0):
         sound = sound[int(offset*sr):(int((offset+duration) * sr))]
     return sound
 
-class SpectrogramExtractor(object):
-    def __init__(self,audio_conf,mel_spec=None,use_cuda=False):
-        self.window_stride = audio_conf['window_stride']
-        self.window_size = audio_conf['window_size']
-        self.sample_rate = audio_conf['sample_rate']
-        self.window = windows.get(audio_conf['window'], windows['hamming'])
-        self.use_cuda = use_cuda
-        self.mel_spec = mel_spec
-
-        self.n_fft = int(self.sample_rate * self.window_size)
-        self.win_length = self.n_fft
-        self.hop_length = int(self.sample_rate * self.window_stride)
-        if mel_spec:  # import dedicated libraries
-            if use_cuda:
-                import torchaudio
-            else:
-                import python_speech_features
-
-    def _get_spect(self, audio):
-        if self.mel_spec:
-            return self._get_mel_spectogram(audio)
-        else:
-            return self._get_spectrogram(audio)
-
-    def _get_mel_spectogram(self, audio):
-        if self.use_cuda:
-            import torchaudio
-            transform = torchaudio.transforms.MelSpectrogram(sample_rate=self.sample_rate, n_fft=self.n_fft,
-                                                             n_mels=self.mel_spec)
-            return transform(torch.Tensor(audio))
-        else:
-            import python_speech_features
-            spect, energy = python_speech_features.fbank(audio, samplerate=self.sample_rate,
-                                                         winlen=self.window_size, winstep=self.window_stride,
-                                                         winfunc=np.hamming, nfilt=self.mel_spec, nfft=self.n_fft)
-            return spect.T
-    def _get_spectrogram(self, audio):
-        if self.use_cuda:
-            e = torch.stft(torch.FloatTensor(audio), self.n_fft, self.hop_length, self.win_length,
-                           window=torch.hamming_window(self.win_length))
-            magnitudes = abs(e.sum(dim=2))
-            return magnitudes
-        else:
-            D = librosa.stft(audio, n_fft=self.n_fft, hop_length=self.hop_length, win_length=self.win_length,
-                             window=scipy.signal.hamming)
-            spect, phase = librosa.magphase(D)
-            return spect
-
-    def extract(self,signal):
-        epsilon = 1e-5
-        log_zero_guard_value=2 ** -24
-        spect = self._get_spect(signal)
-        spect = np.log1p(spect + log_zero_guard_value)
-        # normlize across time
-        mean = spect.mean(axis=1)
-        std = spect.std(axis=1)
-        std += epsilon
-        spect = spect - mean.reshape(-1, 1)
-        spect = spect / std.reshape(-1, 1)
-        return spect
-
-
-class NewSpectrogramExtractor(torch.nn.Module):
+class SpectrogramExtractor(torch.nn.Module):
     def __init__(self, audio_conf, mel_spec=64,use_cuda=False):
         super().__init__()
         window_size_samples = int(audio_conf.sample_rate * audio_conf.window_size)
@@ -175,7 +113,6 @@ class SpectrogramDataset(Dataset):
         self.labels_map = dict([(labels[i],i) for i in range(len(labels))])
         self.validate_sample_rate()
         self.extractor = SpectrogramExtractor(audio_conf,mel_spec,use_cuda)
-        self.extractor = NewSpectrogramExtractor(audio_conf,mel_spec,use_cuda)
         
     def __getitem__(self, index):
         sample = self.df.iloc[index]
