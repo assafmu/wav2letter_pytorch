@@ -4,6 +4,8 @@ Created on Mon Dec 14 11:59:45 2020
 
 @author: Assaf Mushkin
 """
+import random
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -19,6 +21,7 @@ class ConvCTCASR(ptl.LightningModule):
         self.labels = cfg.labels
         self.ctc_decoder = instantiate(cfg.decoder)
         self.criterion = nn.CTCLoss(blank=0, reduction='mean', zero_infinity=True)
+        self.print_decoded_prob = cfg.get('print_decoded_prob',0)
         self.example_input_array = self.create_example_input_array()
         
     def create_example_input_array(self):
@@ -49,6 +52,9 @@ class ConvCTCASR(ptl.LightningModule):
         
     def add_string_metrics(self, out, output_lengths, texts, prefix):
         decoded_texts = self.ctc_decoder.decode(out, output_lengths)
+        if random.random() < self.print_decoded_prob:
+            print(f'reference: {texts[0]}')
+            print(f'decoded  : {decoded_texts[0]}')
         wer_sum, cer_sum,wer_denom_sum,cer_denom_sum = 0,0,0,0
         for expected, predicted in zip(texts, decoded_texts):
             cer_value, cer_denom = self.ctc_decoder.cer_ratio(expected, predicted)

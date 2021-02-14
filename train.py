@@ -38,7 +38,7 @@ def main(cfg: DictConfig):
     #with open(logdir + '/cmd-args.log','w') as f:
     #    f.write(' '.join(sys.argv))
 
-    trainer.fit(model, train_loader)
+    trainer.fit(model, train_loader, val_loader)
     
 
 if __name__ == '__main__':

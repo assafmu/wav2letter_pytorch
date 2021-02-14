@@ -14,20 +14,6 @@ model:
     decoder:
         _target_: decoder.GreedyDecoder
         labels: ${model.labels}
-    # optimizer:
-    #     _target_: torch.optim.SGD
-    #     lr: 1e-5 
-    #     momentum: 0.9
-    #     nesterov: True
-    #     weight_decay: 1e-5
-    # scheduler:
-    #     _target_: torch.optim.lr_scheduler.ExponentialLR
-    #     gamma: 0.999
-    #scheduler:
-    #    _target_: torch.optim.lr_scheduler.OneCycleLR
-    #    max_lr: ${model.optimizer.lr}
-    #    total_steps: ${trainer.max_steps}
-         
 trainer:
     default_root_dir: .
     max_epochs: 5
