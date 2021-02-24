@@ -9,6 +9,7 @@ import librosa
 import numpy as np
 import scipy.signal
 from scipy.io import wavfile
+import soundfile as sf
 import torch
 import torch.nn
 from torch.utils.data import Dataset,DataLoader
@@ -17,16 +18,17 @@ import pandas as pd
 windows = {'hamming': scipy.signal.hamming, 'hann': scipy.signal.hann, 'blackman': scipy.signal.blackman,'bartlett':scipy.signal.bartlett}
 
 def load_audio(path,duration=-1,offset=0):
-    sr, sound = wavfile.read(path)
-    sound = sound.astype('float32') / (2**15 -1)
-    if len(sound.shape) > 1:
-        if sound.shape[1] == 1:
-            sound = sound.squeeze()
+    with sf.SoundFile(path, 'r') as f:
+        dtype = 'float32'
+        sample_rate = f.samplerate
+        if offset > 0:
+            f.seek(int(offset * sample_rate))
+        if duration > 0:
+            samples = f.read(int(duration * sample_rate), dtype=dtype)
         else:
-            sound = sound.mean(axis=1)
-    if duration > 0:
-        sound = sound[int(offset*sr):(int((offset+duration) * sr))]
-    return sound
+            samples = f.read(dtype=dtype)
+    samples = samples.transpose()
+    return samples
 
 class SpectrogramExtractor(torch.nn.Module):
     def __init__(self, audio_conf, mel_spec=64,use_cuda=False):
@@ -90,19 +92,23 @@ class SpectrogramDataset(Dataset):
         '''
         Create a dataset for ASR. Audio conf and labels can be re-used from the model.
         Arguments:
-            manifest_filepath (string): path to the manifest. Each line must be a json containing fields "filepath" and "text". 
+            manifest_filepath (string): path to the manifest. Each line must be a json containing fields "audio_filepath" and "text". 
             audio_conf (dict): dict containing sample rate, and window size stride and type. 
             labels (list): list containing all valid labels in the text.
             mel_spec(int or None): if not None, use mel spectrogram with that many channels.
             use_cuda(bool): Use torch and torchaudio for stft. Can speed up extraction on GPU.
         '''
         super(SpectrogramDataset, self).__init__()
-        prefix_df = pd.read_csv(manifest_filepath,index_col=0,nrows=2)
-        with open(manifest_filepath) as f:
-            lines = f.readlines()
-        self.df = pd.DataFrame(map(json.loads,lines))
+        if manifest_filepath.endswith('.csv'):
+            self.df = pd.read_csv(manifest_filepath,index_col=0)
+        else:
+            with open(manifest_filepath) as f:
+                lines = f.readlines()
+            self.df = pd.DataFrame(map(json.loads,lines))
         if not 'offset' in self.df.columns:
             self.df['offset'] = 0
+        if not 'duration' in self.df.columns:
+            self.df['duration'] = -1
         self.size = len(self.df)
         self.window_stride = audio_conf['window_stride']
         self.window_size = audio_conf['window_size']
@@ -127,8 +133,8 @@ class SpectrogramDataset(Dataset):
         return spect
     
     def validate_sample_rate(self):
-        audio_path = self.df.iloc[0].audio_filepath
-        sr,sound = wavfile.read(audio_path)
+        audio_filepath = self.df.iloc[0].audio_filepath
+        sound, sr = sf.read(audio_filepath)
         assert sr == self.sample_rate, 'Expected sample rate %d but found %d in first file' % (self.sample_rate,sr)
     
     def __len__(self):
