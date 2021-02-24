@@ -33,10 +33,6 @@ def main(cfg: DictConfig):
     model = name_to_model[cfg.model.name](cfg.model)
     trainer = pytorch_lightning.Trainer(**cfg.trainer)
     
-    logdir = trainer.logger.experiment.log_dir
-    #OmegaConf.save(cfg, logdir + '/full_config.yaml')
-    #with open(logdir + '/cmd-args.log','w') as f:
-    #    f.write(' '.join(sys.argv))
 
     trainer.fit(model, train_loader, val_loader)
     

@@ -1,29 +1,21 @@
-# wav2Letter.pytorch
+# Wav2Letter_pytorch
 
 Implementation of Wav2Letter using PyTorch.
 Creates a network based on the [Wav2Letter](https://arxiv.org/abs/1609.03193) architecture, trained with the CTC activation function.
 
 ## Features
 
-* Train Wav2Letter.
-* Language model support using kenlm.
-* Easy start/stop capabilities in the event of crash or hard stop during training.
-* Tensorboard support for visualizing training graphs.
+* Minimalist code, designed to be a white box.
+* Train End-To-End ASR models, including Wav2Letter and Jasper.
+* Beam search decoding integrated with kenlm language models.
+* Uses [Hydra](https://hydra.cc/docs/intro) for easy configuration and usage
+* Uses [PyTorch Lightning](https://www.pytorchlightning.ai/) for simplify training
 
 # Installation
 
-Several libraries are needed to be installed for training to work. I will assume that everything is being installed in
-an Anaconda installation on Ubuntu.
+Install Python 3.6 or higher. 
 
-Install [PyTorch](https://github.com/pytorch/pytorch#installation).
-
-Install [Librosa](https://librosa.github.io/librosa/index.html).
-
-For tensorboard training visualization, install [tensorboardX](https://github.com/lanpa/tensorboardX). This is optional, but recommended.
-
-For data preparation, download or install [FFmpeg](https://www.ffmpeg.org/). 
-
-Finally clone this repo and run this within the repo:
+Clone the repository (or download it) and install according to the requirements file.
 ```
 pip install -r requirements.txt
 ```
@@ -38,10 +30,10 @@ FFmpeg for windows is a portable binary [from here](https://www.ffmpeg.org/downl
 # Usage
 
 ### LibriSpeech Dataset
-Download the dataset you want to use from [openslr](http://www.openslr.org/12/).
-Run ```data/prepare_librispeech.py``` on the downloaded tar.gz file.
+Run ```examples/librispeech.sh``` to download and prepare the data, and start training with a single script.
 
-For example:  ```python wav2letter_torch/data/prep_librispeech.py --zip_file dev-clean.tar.gz --extracted_dir dev-clean --target_dir dataset --manifest_path df.csv```
+You can use the ```data/prepare_librispeech.py``` script to prepare other subsets of the Librispeech dataset. 
+Run it with ```--help``` for more information.
 
 ### Custom Datasets
 To create a custom dataset, create a CSV file containing audio location and text pairs.
@@ -55,10 +47,10 @@ This can be in the following format:
 
 Alternatively, create a Pandas Dataframe with the columns ```filepath, text``` and save it using ``` df.to_csv(path) ```.
 
-Note that only WAV files are supported. If you use a sample rate other than 8K, specify it using ```--sample-rate```.
+If you use a sample rate other than 8K, specify it using ```model.audio_conf.sample_rate=16000``` for example. 
 
 ### Different languages
-In addition to English, Hebrew, and Farsi are supported.
+In addition to English, Hebrew is supported.
 
 To use, run with ```--labels hebrew```. Note that some terminals and consoles do not display UTF-8 properly.
 
