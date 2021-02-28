@@ -13,5 +13,6 @@ import soundfile
 import glob
 import pandas
 import tqdm
+import soundfile
 
 print("All python modules requirements available.")

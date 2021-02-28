@@ -1,15 +1,15 @@
 # Wav2Letter_pytorch
 
 Implementation of Wav2Letter using PyTorch.
-Creates a network based on the [Wav2Letter](https://arxiv.org/abs/1609.03193) architecture, trained with the CTC activation function.
+Creates a network based on the [Wav2Letter](https://arxiv.org/abs/1609.03193) architecture, trained with CTC loss.
 
 ## Features
 
-* Minimalist code, designed to be a white box.
+* Minimalist code, designed to be a white box - dive into the code!
 * Train End-To-End ASR models, including Wav2Letter and Jasper.
-* Beam search decoding integrated with kenlm language models.
 * Uses [Hydra](https://hydra.cc/docs/intro) for easy configuration and usage
 * Uses [PyTorch Lightning](https://www.pytorchlightning.ai/) for simplify training
+* Beam search decoding integrated with kenlm language models.
 
 # Installation
 
@@ -19,62 +19,32 @@ Clone the repository (or download it) and install according to the requirements 
 ```
 pip install -r requirements.txt
 ```
-## Windows installation
-
-As of December 20, 2020, Windows is supported but recommended only for spot checks - for actual training, use Linux.
-
-We recommend installing PyTorch with an Anaconda installation, and Microsoft Visual C++ Build Tools for kenlm and python-levenshtein.
-
-FFmpeg for windows is a portable binary [from here](https://www.ffmpeg.org/download.html#build-windows)
 
 # Usage
 
-### LibriSpeech Dataset
+## LibriSpeech Example
 Run ```examples/librispeech.sh``` to download and prepare the data, and start training with a single script.
 
 You can use the ```data/prepare_librispeech.py``` script to prepare other subsets of the Librispeech dataset. 
 Run it with ```--help``` for more information.
 
-### Custom Datasets
-To create a custom dataset, create a CSV file containing audio location and text pairs.
-This can be in the following format:
-
-```
-/path/to/audio.wav,transcription
-/path/to/audio2.wav,transcription
-...
-```
-
-Alternatively, create a Pandas Dataframe with the columns ```filepath, text``` and save it using ``` df.to_csv(path) ```.
-
-If you use a sample rate other than 8K, specify it using ```model.audio_conf.sample_rate=16000``` for example. 
-
-### Different languages
-In addition to English, Hebrew is supported.
-
-To use, run with ```--labels hebrew```. Note that some terminals and consoles do not display UTF-8 properly.
 
 
 ## Training
-
+Most simple example:
 ```
-python train.py --train-manifest data/train_manifest.csv --val-manifest data/val_manifest.csv
+python train.py data.train_manifest TRAIN.csv data.val_manifest VALID.csv
 ```
+Training a Jasper model is as simple as: ```python train.py model.name=jasper ...```
 
-Use `python train.py --help` for more parameters and options.
+To train with multiple GPU's, mixed precision, or many other options, see the [Pytorch-Lightning Trainer](https://pytorch-lightning.readthedocs.io/en/latest/common/trainer.html#trainer-class-api) documentation. 
 
-There is [Tensorboard](https://github.com/lanpa/tensorboard-pytorch) support to visualize training. Follow the instructions to set up. To use:
-
-```
-python train.py --tensorboard --logdir log_dir/ # Make sure the Tensorboard instance is made pointing to this log directory
-```
-### Continue training existing model
-To continue training from an existing model, run with ```--continue-from MODEL_PATH```.
-
-Note that ```--layers, --labels, --window_size, --window_stride, --window, --sample_rate``` are all determined from the configuration of the loaded model, and are ignored. 
+Many elements of the model and training are managed via configuration files and command line flags via Hydra.  
+This includes the audio preprocessing configuration, the optimizer and learning-rate scheduler, and the number and configuration of layers. See the configuration directory for more details.  
+To see the entire configuration, run ```python train.py [optional overrides] --cfg=job```
 
 ## Testing/Inference
-
+WIP!
 To evaluate a trained model on a test set (has to be in the same format as the training set):
 
 ```
@@ -85,15 +55,24 @@ To see the decoded outputs compared to the test data, run with either ```--print
 
 You can use a LM during decoding. The LM is expected to be a valid ARPA model, loaded with kenlm. Add ```--lm-path``` to use it. See ```--beam-search-params``` to fine tune your parameters for beam search.
 
+### Custom Datasets
+To create a custom dataset, create a Pandas Dataframe with the columns ```audio_filepath, text``` and save it using ``` df.to_csv(path) ```.
+Alternatively, you can create a .json file - each line contains a json of a sample with at least ```audio_filepath, text``` as fields.
+You can add reading specific sections of audio files by adding ```offset``` and ```duration``` fields (in seconds). The values 0 and -1 are the default values, respectively, and cause reading the entire audio file.
+If you use a sample rate other than 16K, specify it using ```model.audio_conf.sample_rate=8000``` for example. 
+
+### Different languages
+In addition to English, Hebrew is supported.
+
+To use, run with ```--labels hebrew```. Note that some terminals and consoles do not display UTF-8 properly.
+
+
 ## Differences from article
 
-There are some subtle differences between this implementation and the original.
-
-We use CTC loss instead of ASG, which leads to a small difference in labels definition and output interpretation.
-
-We currently use spectrogram features instead of MFCC, which achieved the best results in the original article.
-
-Some of the network hyperparameters are different - convolution kernel sizes, strides, and default sample rate.
+There are some subtle differences between this implementation and the original.  
+We use CTC loss instead of ASG, which leads to a small difference in labels definition and output interpretation.  
+We currently use spectrogram features instead of MFCC, which achieved the best results in the original article.  
+Some of the network hyperparameters are different - convolution kernel sizes, strides, and default sample rate.  
 
 ## Acknowledgements
 This work was originally based off [Silversparro's Wav2Letter](https://github.com/silversparro/wav2letter.pytorch).

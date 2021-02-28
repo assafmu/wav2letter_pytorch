@@ -38,7 +38,7 @@ def read_transcriptions(subset_name,extracted_dir):
     return all_lines
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser('Librispeech data preparation')
+    parser = argparse.ArgumentParser('Librispeech data preparation.')
     parser.add_argument('--subset',type=str,default='dev-clean',help='Subset of Librispeech to download.')
     parser.add_argument('--download_dir',type=str,default='.',help='Directory to download Librispeech to. Will be created if not exists.')
     parser.add_argument('--extracted_dir',type=str,default='./extracted', help='Directory to extract Librispeech to. Will be created if not exists.')
