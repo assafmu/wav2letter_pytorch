@@ -20,9 +20,9 @@ name_to_model = {
     
 def get_data_loaders(labels, cfg):
     train_dataset = SpectrogramDataset(cfg.train_manifest, cfg.audio_conf, labels,mel_spec=cfg.mel_spec)
-    train_batch_loader = BatchAudioDataLoader(train_dataset, batch_size=cfg.batch_size)
+    train_batch_loader = BatchAudioDataLoader(train_dataset, batch_size=cfg.batch_size, num_workers=3)
     eval_dataset = SpectrogramDataset(cfg.val_manifest, cfg.audio_conf, labels,mel_spec=cfg.mel_spec)
-    val_batch_loader = BatchAudioDataLoader(eval_dataset,batch_size=cfg.batch_size)
+    val_batch_loader = BatchAudioDataLoader(eval_dataset,batch_size=cfg.batch_size, num_workers=3)
     return train_batch_loader, val_batch_loader
 
 @hydra.main(config_path='configuration', config_name='config')

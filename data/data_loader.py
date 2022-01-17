@@ -153,8 +153,8 @@ def _collator(batch):
     longest_input = max(input_lengths).item()
     longest_target = max(target_lengths).item()
     pad_function = lambda x:np.pad(x,((0,0),(0,longest_input-x.shape[1])),mode='constant')
-    inputs = torch.FloatTensor(list(map(pad_function,inputs)))
-    targets = torch.IntTensor([np.pad(np.array(t),(0,longest_target-len(t)),mode='constant') for t in targets])
+    inputs = torch.FloatTensor(np.array(list(map(pad_function,inputs))))
+    targets = torch.IntTensor(np.array([np.pad(np.array(t),(0,longest_target-len(t)),mode='constant') for t in targets]))
     return inputs, input_lengths, targets, target_lengths, file_paths, texts
 
 class BatchAudioDataLoader(DataLoader):

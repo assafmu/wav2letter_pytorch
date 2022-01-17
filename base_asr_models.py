@@ -35,7 +35,7 @@ class ConvCTCASR(ptl.LightningModule):
         Compute the output lengths given the input lengths.
         Override if ratio is not strictly proportional (can happen with unpadded convolutions)
         '''
-        output_lengths = input_lengths // self.scaling_factor
+        output_lengths = torch.div(input_lengths, self.scaling_factor, rounding_mode='trunc')
         return output_lengths
     
     @property 

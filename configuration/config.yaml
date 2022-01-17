@@ -17,7 +17,7 @@ model:
 trainer:
     default_root_dir: .
     max_epochs: 5
-    max_steps: null
+    max_steps: -1
     gpus: 0
     
 hydra:
