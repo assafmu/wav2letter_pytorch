@@ -10,7 +10,7 @@ data:
     audio_conf: ${model.audio_conf}
 model:
     input_size: 64
-    labels: english_lowercase
+    labels: english
     decoder:
         _target_: decoder.GreedyDecoder
         labels: ${model.labels}
