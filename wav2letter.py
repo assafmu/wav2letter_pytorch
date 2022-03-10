@@ -60,7 +60,7 @@ class Wav2Letter(ConvCTCASR):
         layer_size = self.input_size
         conv_blocks = []
         for idx in range(len(layers)):
-            layer_params = layers[idx] # TODO: can we use **layer_params here?
+            layer_params = layers[idx]
             layer = Conv1dBlock(input_channels=layer_size,output_channels=layer_params.output_size,
                                 kernel_size=(layer_params.kernel_size,),stride=layer_params.stride,
                                 dilation=layer_params.dilation,drop_out_prob=layer_params.dropout)

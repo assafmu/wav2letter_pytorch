@@ -1,6 +1,6 @@
 defaults:
     - audio: standard_16k
-    - optimizer: exp_lr_optimizer
+    - optimizer: const_lr_optimizer
     - model: wav2letter
 data:
     train_manifest: ???

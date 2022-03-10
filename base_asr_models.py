@@ -81,7 +81,8 @@ class ConvCTCASR(ptl.LightningModule):
         loss = self.criterion(out.transpose(0,1), targets, output_lengths, target_lengths)
         logs = {'train_loss':loss,'learning_rate':self.optimizers().param_groups[0]['lr']}
         logs.update(self.add_string_metrics(out, output_lengths, texts, 'train'))
-        self.log_dict(logs)
+        #self.log_dict(logs)
+        self.log('train_cer',logs['train_cer'],prog_bar=True)
         return loss
     
     def validation_step(self, batch, batch_idx):
