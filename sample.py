@@ -1,5 +1,6 @@
 from wav2letter import Conv1dBlock
 import data.data_loader
+import data.label_sets
 from collections import namedtuple, OrderedDict
 import torch
 import torch.nn as nn
@@ -21,6 +22,9 @@ class Wav2LetterPretrained(nn.Module):
         self.eval()
 
     def forward(self,x):
+        ''' Run the model on samples. Input: [Batch, Channels, Length]
+        Output: [Batch, Length, Characters'''
+
         scores = self.conv1ds(x).transpose(1,2)
         probs = F.log_softmax(scores,dim=-1)
         return probs
@@ -41,3 +45,5 @@ spect = spect_extractor.extract(audio)
 print(f'input shape:{spect.shape}')
 outputs = model(spect.unsqueeze(0))
 print(f'output shape:{outputs.shape}')
+english_labels = data.label_sets.labels_map['english']
+print(f'English labels: {english_labels}')

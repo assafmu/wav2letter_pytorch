@@ -13,15 +13,17 @@ import pytorch_lightning as ptl
 import numpy as np
 from hydra.utils import instantiate
 
+import decoder
+
 class ConvCTCASR(ptl.LightningModule):
     def __init__(self,cfg):
         super().__init__()
         self._cfg = cfg
         self.audio_conf = cfg.audio_conf
         self.labels = cfg.labels
-        self.ctc_decoder = instantiate(cfg.decoder)
+        self.ctc_decoder = cfg.decoder if isinstance(cfg.decoder,decoder.Decoder) else instantiate(cfg.decoder)
         self.criterion = nn.CTCLoss(blank=0, reduction='mean', zero_infinity=True)
-        self.print_decoded_prob = cfg.get('print_decoded_prob',0)
+        self.print_decoded_prob = cfg.print_decoded_prob
         self.example_input_array = self.create_example_input_array()
         
     def create_example_input_array(self):
@@ -71,8 +73,8 @@ class ConvCTCASR(ptl.LightningModule):
         
     #PyTorch Lightning methods
     def configure_optimizers(self):
-        optimizer = instantiate(self._cfg.optimizer, params=self.parameters())
-        scheduler = instantiate(self._cfg.scheduler,optimizer=optimizer)
+        optimizer = self._cfg.optimizer(self.parameters()) if callable(self._cfg.optimizer) else instantiate(self._cfg.optimizer, params=self.parameters())
+        scheduler = self._cfg.scheduler(optimizer) if callable(self._cfg.scheduler) else instantiate(self._cfg.scheduler, optimizer=optimizer)
         return [optimizer],[scheduler]
     
     def training_step(self, batch, batch_idx):

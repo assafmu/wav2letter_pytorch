@@ -110,10 +110,10 @@ class SpectrogramDataset(Dataset):
         if not 'duration' in self.df.columns:
             self.df['duration'] = -1
         self.size = len(self.df)
-        self.window_stride = audio_conf['window_stride']
-        self.window_size = audio_conf['window_size']
-        self.sample_rate = audio_conf['sample_rate']
-        self.window = windows.get(audio_conf['window'], windows['hamming'])
+        self.window_stride = audio_conf.window_stride
+        self.window_size = audio_conf.window_size
+        self.sample_rate = audio_conf.sample_rate
+        self.window = windows.get(audio_conf.window, windows['hamming'])
         self.use_cuda = use_cuda
         self.mel_spec = mel_spec
         self.labels_map = dict([(labels[i],i) for i in range(len(labels))])

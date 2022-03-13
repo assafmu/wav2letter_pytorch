@@ -32,7 +32,7 @@ def main(cfg: DictConfig):
     train_loader, val_loader = get_data_loaders(cfg.model.labels,cfg.data)
     model = name_to_model[cfg.model.name](cfg.model)
     trainer = pytorch_lightning.Trainer(**cfg.trainer)
-    
+    print(model)
 
     trainer.fit(model, train_loader, val_loader)
     
