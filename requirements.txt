@@ -3,10 +3,10 @@ numpy
 pandas
 librosa
 tqdm
-pytorch
 six
 scipy
 glob2
+wget
 # pytorch-lightning
 # The following libraries require Microsoft Visual Build C++ Tools on windows. Should check requirements on Linux.
 python-levenshtein

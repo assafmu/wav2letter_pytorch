@@ -4,7 +4,6 @@ import librosa
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import pytorch_lightning as ptl
 import numpy as np
 
 from base_asr_models import ConvCTCASR 
