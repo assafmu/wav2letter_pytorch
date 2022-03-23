@@ -13,11 +13,6 @@ if [ $? -ne 0 ]; then
 	echo "Data preparation failed"
 	exit
 fi
-echo "Running sanity check"
-python ${base_dir}/train.py data.train_manifest=mini_100.csv data.val_manifest=mini_100.csv trainer.max_epochs=1
-if [ $? -ne 0 ]; then
-	echo "Training failed"
-	exit
-fi
-echo All checks done! You're ready for the workshop
+
+echo All checks done! You're ready for the workshop.
 
