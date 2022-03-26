@@ -14,5 +14,5 @@ if [ $? -ne 0 ]; then
 	exit
 fi
 
-echo All checks done! You're ready for the workshop.
+echo All checks done! You\'re ready for the workshop.
 
