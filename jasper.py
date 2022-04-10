@@ -467,10 +467,7 @@ class Jasper(ConvCTCASR):
         output_lengths = encoder_res[1].to(dtype=int)
         jasper_res = self.final_layer(encoder_res[0])
         jasper_res = jasper_res.transpose(2,1) # For consistency with other models.
-        if self.training:
-            jasper_res = F.log_softmax(jasper_res,dim=-1)
-        else:
-            jasper_res = F.softmax(jasper_res,dim=-1)
+        jasper_res = F.log_softmax(jasper_res,dim=-1)
         assert not (jasper_res != jasper_res).any()  # is there any NAN in result?
         return jasper_res, output_lengths # [Batches X Labels X Time (padded to max)], [Batches]
 
