@@ -439,14 +439,14 @@ class Jasper(ConvCTCASR):
         for l in cfg.jasper_blocks[:cfg.mid_layers]:
             layer = JasperBlock(inplanes = layer_size, planes = l.layer_size,
                             kernel_size = l.kernel_size,
-                            stride = l.get('stride',1),
-                            dilation = l.get('dilation',1), 
+                            stride = l.stride,
+                            dilation = l.dilation, 
                             residual = l.residual,
-                            repeat = l.get('repeat',1),
-                            conv_mask = l.get('conv_mask',True),
-                            separable = l.get('separable',True),
+                            repeat = l.repeat,
+                            conv_mask = l.conv_mask,
+                            separable = l.separable,
                             activation = torch.nn.ReLU(),
-                            dropout = l.get('dropout',0))
+                            dropout = l.dropout)
             encoder_layers.append(layer)
             layer_size = l.layer_size
         self.jasper_encoder = nn.Sequential(*encoder_layers)
