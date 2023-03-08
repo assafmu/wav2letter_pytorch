@@ -53,7 +53,7 @@ class ConvCTCASR(nn.Module):
     def add_string_metrics(self, out, output_lengths, texts, prefix):
         decoded_texts = self.ctc_decoder.decode(out, output_lengths)
         if random.random() < self.print_decoded_prob:
-            print(f'reference: {texts[0]}')
+            print(f'\nreference: {texts[0]}')
             print(f'decoded  : {decoded_texts[0]}')
         wer_sum, cer_sum,wer_denom_sum,cer_denom_sum = 0,0,0,0
         for expected, predicted in zip(texts, decoded_texts):
